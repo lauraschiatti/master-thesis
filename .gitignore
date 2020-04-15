@@ -38,4 +38,7 @@
 .DS_Store
 
 # tests results
-run_all_tests
+*/run_all_tests.*
+*/run_all_tests
+test_data/*.bin
+
