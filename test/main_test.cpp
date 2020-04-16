@@ -12,6 +12,7 @@
 int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
  
+  // set the log destination
   FLAGS_log_dir = ".";
   google::InitGoogleLogging(argv[0]);
 

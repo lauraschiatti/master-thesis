@@ -1,5 +1,8 @@
 # GTEST_DIR = ../../gtest-1.7.0
+# osx
 GTEST_DIR = ~/googletest
+# ubuntu
+# GTEST_DIR = /usr 
 BOOST_DIR = /usr/local
 GLOG_GFLAGS_DIR = /usr/local
 

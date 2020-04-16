@@ -1,5 +1,0 @@
-Log file created at: 2020/04/16 21:48:49
-Running on machine: MBP-de-Laura.lan
-Log line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg
-I0416 21:48:49.906468 324550080 serialize.hpp:45] Load data from movielens.train.bin in 0.001 secs
-I0416 21:48:49.908339 324550080 serialize.hpp:45] Load data from movielens.test.bin in 0 secs

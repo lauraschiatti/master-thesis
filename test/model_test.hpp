@@ -27,6 +27,7 @@ TEST(model, sample_movielens_data) {
   int line_size = 4; // Dataset format: UserID::MovieID::Rating::Timestamp
   
   std::string sample_data(movie_lens);
+  
   auto line_parser = [&](const std::string& line) {
     auto rets = split_line(line, ": ");
     CHECK_EQ(rets.size(), line_size);
@@ -47,7 +48,7 @@ TEST(model, sample_movielens_data) {
   * test models
   */
 
-  std::string method = "CDAE";
+  // std::string method = "CDAE";
 
 
   // {
@@ -94,41 +95,41 @@ TEST(model, sample_movielens_data) {
 //     sgd.train(train, test, {TOPN});
 //   }
 
-  if (method == "CDAE") {
+  // if (method == "CDAE") {
     
-    CDAEConfig config;
-    config.learn_rate = 0.1; // Learning Rate
-    config.num_dim = 10; // Num of latent dimensions
-    config.using_adagrad = true; // Use AdaGrad
-    config.asymmetric = false; // Asymmetric DAE
-    config.num_corruptions = 1; // Num of Corruptions
-    config.corruption_ratio = 0; // Corruption Ratio
-    config.linear = false; // Linear DAE
-    config.scaled = false; // Scaled input
-    config.num_neg = 5; // Num of negative samples
-    config.user_factor = true; // using user factor
-    config.beta = 1.;  // Beta for adagrad
-    config.linear_function = false; // Using Linear Mapping Function
-    config.tanh = false; // Using tanh NonLinear Function
+  //   CDAEConfig config;
+  //   config.learn_rate = 0.1; // Learning Rate
+  //   config.num_dim = 10; // Num of latent dimensions
+  //   config.using_adagrad = true; // Use AdaGrad
+  //   config.asymmetric = false; // Asymmetric DAE
+  //   config.num_corruptions = 1; // Num of Corruptions
+  //   config.corruption_ratio = 0; // Corruption Ratio
+  //   config.linear = false; // Linear DAE
+  //   config.scaled = false; // Scaled input
+  //   config.num_neg = 5; // Num of negative samples
+  //   config.user_factor = true; // using user factor
+  //   config.beta = 1.;  // Beta for adagrad
+  //   config.linear_function = false; // Using Linear Mapping Function
+  //   config.tanh = false; // Using tanh NonLinear Function
 
-    std::string loss_type = "SQUARE"; // Loss function type
+  //   std::string loss_type = "SQUARE"; // Loss function type
 
-    if (loss_type == "SQUARE") {
-      config.lt = SQUARE;
-    } else if (loss_type == "LOG") {
-      config.lt = LOG;
-    } else if (loss_type == "HINGE") {
-      config.lt = HINGE;
-    } else if (loss_type == "LOGISTIC") {
-      config.lt = LOGISTIC;
-    } else if (loss_type == "CE") {
-      config.lt = CROSS_ENTROPY;
-    } else {
-      LOG(FATAL) << "UNKNOWN LOSS";
-    }
+  //   if (loss_type == "SQUARE") {
+  //     config.lt = SQUARE;
+  //   } else if (loss_type == "LOG") {
+  //     config.lt = LOG;
+  //   } else if (loss_type == "HINGE") {
+  //     config.lt = HINGE;
+  //   } else if (loss_type == "LOGISTIC") {
+  //     config.lt = LOGISTIC;
+  //   } else if (loss_type == "CE") {
+  //     config.lt = CROSS_ENTROPY;
+  //   } else {
+  //     LOG(FATAL) << "UNKNOWN LOSS";
+  //   }
 
-    CDAE model(config);
-    Solver<CDAE> solver(model, 50);
-    solver.train(train, test, {TOPN});
-  }
+  //   CDAE model(config);
+  //   Solver<CDAE> solver(model, 50);
+  //   solver.train(train, test, {TOPN});
+  // }
 }

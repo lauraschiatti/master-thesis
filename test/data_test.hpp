@@ -66,7 +66,7 @@ TEST(dataset, test_recsys_data) {
   LOG(INFO) << "iterate over " << cnt << " instances.";
 
   /*
-  * test train-test splitting (0.7-0.3)
+  * test train-test splitting
   */
 
   LOG(INFO) << "random split : ";
@@ -78,3 +78,5 @@ TEST(dataset, test_recsys_data) {
   LOG(INFO) << train;
   LOG(INFO) << test;
 }
+
+  
