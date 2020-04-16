@@ -82,37 +82,37 @@ void Solver<Model>::train(const Data& train_data,
 }
 
 
-// template<class Model>
-// void Solver<Model>::test(const Data& test_data,
-//                          const std::vector<EvalType>& eval_types) {
+template<class Model>
+void Solver<Model>::test(const Data& test_data,
+                         const std::vector<EvalType>& eval_types) {
 
-//   Timer t;
-//   std::vector<std::shared_ptr<Evaluation<Model>>> evaluations(eval_types.size());
-//   for (size_t idx = 0; idx < eval_types.size(); ++idx) {
-//     evaluations[idx] = Evaluation<Model>::create(eval_types[idx]);
-//   }
+  Timer t;
+  std::vector<std::shared_ptr<Evaluation<Model>>> evaluations(eval_types.size());
+  for (size_t idx = 0; idx < eval_types.size(); ++idx) {
+    evaluations[idx] = Evaluation<Model>::create(eval_types[idx]);
+  }
 
-//   LOG(INFO) << std::string(100, '-') << std::endl;
-//   {
-//     std::stringstream ss;
-//     ss << std::setfill(' ') 
-//         << std::setw(8) << "Time"  << "|";
-//     if(test_data.size() > 0) {
-//       for (size_t idx = 0; idx < eval_types.size(); ++idx) 
-//         ss << evaluations[idx]->evaluation_type() << "|";
-//     }
-//     LOG(INFO) << ss.str();
-//   }
+  LOG(INFO) << std::string(100, '-') << std::endl;
+  {
+    std::stringstream ss;
+    ss << std::setfill(' ') 
+        << std::setw(8) << "Time"  << "|";
+    if(test_data.size() > 0) {
+      for (size_t idx = 0; idx < eval_types.size(); ++idx) 
+        ss << evaluations[idx]->evaluation_type() << "|";
+    }
+    LOG(INFO) << ss.str();
+  }
 
-//   {
-//     std::stringstream ss;
-//     ss << std::setw(8) << std::setprecision(3) << t.elapsed() << "|";
-//     if (test_data.size() > 0) {
-//       for (size_t idx = 0; idx < eval_types.size(); ++idx) 
-//         ss << evaluations[idx]->evaluate(*model_, test_data) << "|";
-//     }
-//     LOG(INFO) << ss.str();
-//   }
-// }
+  {
+    std::stringstream ss;
+    ss << std::setw(8) << std::setprecision(3) << t.elapsed() << "|";
+    if (test_data.size() > 0) {
+      for (size_t idx = 0; idx < eval_types.size(); ++idx) 
+        ss << evaluations[idx]->evaluate(*model_, test_data) << "|";
+    }
+    LOG(INFO) << ss.str();
+  }
+}
 
 } // namespace
