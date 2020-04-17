@@ -26,10 +26,11 @@
 
 // files
 // DATASET: movieLens
+std::string dataset = "movielens";
 DEFINE_string(input_file, "data/sample_movielens_data.txt", "input data");
-DEFINE_string(cache_file, "movielens.bin", "cache file"); // save prepared data
-DEFINE_string(train_cache_file, "movielens.train.bin", "cached train file"); // save splitted train data
-DEFINE_string(test_cache_file, "movielens.test.bin", "cached test file"); // save splitted test data
+DEFINE_string(cache_file, dataset + ".bin", "cache file"); // save prepared data
+DEFINE_string(train_cache_file, dataset + ".train.bin", "cached train file"); // save splitted train data
+DEFINE_string(test_cache_file, dataset + ".test.bin", "cached test file"); // save splitted test data
 
 // task
 DEFINE_string(task, "train", "Task type");
@@ -57,7 +58,6 @@ DEFINE_string(loss_type, "SQUARE", "Loss function type");
 DEFINE_double(beta, 1., "Beta for adagrad");
 
 int main(int argc, char* argv[]) {
-  
   using namespace libcf;
   
   // set the log destination
@@ -69,11 +69,16 @@ int main(int argc, char* argv[]) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   /*
-  * Task
+  * Train-test tasks
   */
-  
-  //TODO: do prepare and split once (check .bin files)
-  if (FLAGS_task == "prepare") {
+
+  // FLAGS_task == "prepare" 
+  // -----------------------
+
+  std::ifstream data_file;
+  data_file.open(dataset + ".bin");
+   
+  if (!data_file){ // dataset file does not exist
     std::cout<<"TASK: prepare\n";
 
     int line_size = 4; // Dataset format: UserID::MovieID::Rating::Timestamp
@@ -92,7 +97,14 @@ int main(int argc, char* argv[]) {
     save(data, FLAGS_cache_file);  
   }
 
-  if (FLAGS_task == "split") {
+
+  //FLAGS_task == "split"
+  // --------------------
+  
+  std::ifstream train_file;
+  train_file.open(dataset + ".train.bin");
+   
+  if (!train_file){ // train dataset file does not exist
     std::cout<<"TASK: split\n";
 
     Data data;
@@ -106,9 +118,7 @@ int main(int argc, char* argv[]) {
     
     save(train, FLAGS_train_cache_file);
     save(test, FLAGS_test_cache_file);
-  }
-
-  // Train-test
+  }  
 
   Data train, test;
 
@@ -193,7 +203,7 @@ int main(int argc, char* argv[]) {
   // }
 
   if (FLAGS_method == "CDAE") {
-    std::cout << "Method: CDAE\n";
+    std::cout << "METHOD: CDAE\n";
     
     CDAEConfig config;
     config.learn_rate = FLAGS_learn_rate;
