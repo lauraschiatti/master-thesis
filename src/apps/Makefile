@@ -23,7 +23,7 @@ $(BIN) : $(OBJ)
 
 clean:
 	$(RM) $(BIN) $(OBJ) 
-	$(RM) $(SRC_DIR)/apps/log/movielens_implicit.log* 
+	$(RM) $(SRC_DIR)/apps/log/*.log*
 
 test:
 	make clean && make && ./main

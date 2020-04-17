@@ -11,7 +11,7 @@
 #include <base/random.hpp>
 // #include <model/linear_model.hpp>
 // #include <model/factor_model.hpp>
-// #include <model/recsys/popularity.hpp>
+#include <model/recsys/popularity.hpp>
 // #include <model/recsys/itemcf.hpp>
 // #include <model/recsys/usercf.hpp>
 // #include <solver/sgd.hpp>
@@ -135,11 +135,11 @@ int main(int argc, char* argv[]) {
 
   Random::timed_seed();
 
-  // {
-  //   Popularity pop_model;
-  //   Solver<Popularity> solver(pop_model);
-  //   solver.train(train, test, {TOPN});
-  // }
+  {
+    Popularity pop_model;
+    Solver<Popularity> solver(pop_model);
+    solver.train(train, test, {TOPN});
+  }
 
   // if (FLAGS_method == "ITEMCF") {
   //   ItemCF model(Jaccard, 50);
