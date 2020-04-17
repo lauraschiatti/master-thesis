@@ -30,8 +30,8 @@ struct CDAEConfig {
   bool tanh = false;
 };
 
-/* Denoising Auto-Encoder
- *
+/* 
+ * Denoising Auto-Encoder
  */
 class CDAE : public RecsysModelBase {
 

@@ -25,17 +25,18 @@
 */
 
 // files
+// DATASET: movieLens
 DEFINE_string(input_file, "data/sample_movielens_data.txt", "input data");
 DEFINE_string(cache_file, "movielens.bin", "cache file"); // save prepared data
 DEFINE_string(train_cache_file, "movielens.train.bin", "cached train file"); // save splitted train data
 DEFINE_string(test_cache_file, "movielens.test.bin", "cached test file"); // save splitted test data
 
 // task
-DEFINE_string(task, "test", "Task type");
+DEFINE_string(task, "train", "Task type");
 
 // methods
 DEFINE_int32(seed, 20141119, "Random Seed");
-DEFINE_string(method, "NONE", "Which Method to use"); // "NONE"
+DEFINE_string(method, "CDAE", "Which Method to use"); // "NONE"
 
 // model settings
 DEFINE_int32(num_dim, 10, "Num of latent dimensions");
@@ -67,14 +68,17 @@ int main(int argc, char* argv[]) {
   gflags::SetUsageMessage("movielens");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-
   /*
   * Task
   */
+  
+  //TODO: do prepare and split once (check .bin files)
+  if (FLAGS_task == "prepare") {
+    std::cout<<"TASK: prepare\n";
 
-  int line_size = 4; // Dataset format: UserID::MovieID::Rating::Timestamp
+    int line_size = 4; // Dataset format: UserID::MovieID::Rating::Timestamp
 
-  auto line_parser = [&](const std::string& line) {
+    auto line_parser = [&](const std::string& line) {
       // auto rets = split_line(line, " ");
       auto rets = split_line(line, ": ");
       CHECK_EQ(rets.size(), line_size); 
@@ -82,28 +86,34 @@ int main(int argc, char* argv[]) {
       //  return std::vector<std::string>{};
       return std::vector<std::string>{rets[0], rets[1], "1"};
     };
-  
-  if (FLAGS_task == "prepare") {
+
     Data data;
     data.load(FLAGS_input_file, RECSYS, line_parser, true);
     save(data, FLAGS_cache_file);  
   }
 
   if (FLAGS_task == "split") {
+    std::cout<<"TASK: split\n";
+
     Data data;
     load(FLAGS_cache_file, data);
     LOG(INFO) << data; 
+    
     Data train, test;
     data.random_split_by_feature_group(train, test, 0, 0.2);
     LOG(INFO) << train;
     LOG(INFO) << test;
+    
     save(train, FLAGS_train_cache_file);
     save(test, FLAGS_test_cache_file);
   }
 
+  // Train-test
+
   Data train, test;
 
   if (FLAGS_task == "train") {
+    std::cout << "TASK: train\n";
 
     Random::seed(FLAGS_seed); // use the same seed to split the data 
 
@@ -115,11 +125,13 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << test;
 
   } if (FLAGS_task == "test") {
+    std::cout << "TASK: test\n";
     load(FLAGS_train_cache_file, train);
     load(FLAGS_test_cache_file, test);
-  } else {
-    return -1;
-  }
+  } //else {
+  //   std::cout<<"TASK: else\n";
+  //   return -1;
+  // }
 
   Random::timed_seed();
 
@@ -134,7 +146,6 @@ int main(int argc, char* argv[]) {
   //   Solver<ItemCF> solver(model);
   //   solver.train(train, test, {TOPN});
   // }
-
 
   // if (FLAGS_method == "MF") {
   //   IMFConfig config;
@@ -182,6 +193,8 @@ int main(int argc, char* argv[]) {
   // }
 
   if (FLAGS_method == "CDAE") {
+    std::cout << "Method: CDAE\n";
+    
     CDAEConfig config;
     config.learn_rate = FLAGS_learn_rate;
     config.num_dim = FLAGS_num_dim;
@@ -213,6 +226,7 @@ int main(int argc, char* argv[]) {
     CDAE model(config);
     Solver<CDAE> solver(model, 50);
     solver.train(train, test, {TOPN});
+    // solver.test(test, {TOPN});
   }
 
   return 0;

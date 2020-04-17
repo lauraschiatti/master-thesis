@@ -3,7 +3,7 @@
 namespace libcf {
   
 /*
-* training model
+* Train model
 */ 
 template<class Model>
 void Solver<Model>::train(const Data& train_data, 
@@ -81,6 +81,10 @@ void Solver<Model>::train(const Data& train_data,
   LOG(INFO) << std::string(110, '-') << std::endl;
 }
 
+
+/*
+* Test model
+*/
 
 template<class Model>
 void Solver<Model>::test(const Data& test_data,

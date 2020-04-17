@@ -8,8 +8,8 @@ LDFLAGS= -lpthread -lboost_serialization-mt -lboost_iostreams-mt -lglog -lgflags
 INCLUDE = -I$(SRC_DIR) -I$(BOOST_DIR)/include 
 LIBS = -L$(BOOST_DIR)/lib -Wl,-rpath $(BOOST_DIR)/lib 
 
-BIN =  movielens 
-SOURCES = movielens.cpp
+BIN =  main 
+SOURCES = main.cpp
 OBJ = $(SOURCES:.cpp=.o)
 
 all:  $(BIN) 
@@ -23,8 +23,7 @@ $(BIN) : $(OBJ)
 
 clean:
 	$(RM) $(BIN) $(OBJ) 
-	# remove log files
 	$(RM) $(SRC_DIR)/apps/log/movielens_implicit.log* 
 
 test:
-	make clean && make && ./movielens
+	make clean && make && ./main
