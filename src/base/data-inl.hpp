@@ -410,6 +410,9 @@ Data::get_feature_to_set_hashtable(size_t feature_group_idx_a,
   return std::move(rets);
 }
 
+/*
+ * Get user ratings  
+*/
 std::unordered_map<size_t, std::unordered_map<size_t, double>> 
 Data::get_feature_pair_label_hashtable(size_t feature_group_idx_a, 
                                  size_t feature_group_idx_b) const {

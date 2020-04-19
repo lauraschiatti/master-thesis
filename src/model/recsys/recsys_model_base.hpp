@@ -18,14 +18,24 @@ namespace libcf {
 class RecsysModelBase : public ModelBase {
  public: 
   
+  /**
+   * Binary dataset
+  */
   virtual bool is_implicit() const {
     return true;
   }
   
+  /**
+   * Keep only ratings >= 4 and treat the other ratings as missing entries
+   * retained ratings are converted to 1
+  */
   virtual double rating_converter(double x) const {
     return (x > 3.0) ? 1. : 0.;
   }
 
+  /**
+   * Set number of users, items and ratings 
+  */
   virtual void reset(const Data& data_set) {
     ModelBase::reset(data_set);
     user_rated_items_ = data_->get_feature_pair_label_hashtable(0, 1);
@@ -43,6 +53,9 @@ class RecsysModelBase : public ModelBase {
     return predict_user_item_rating(uid, iid);
   }
   
+  /**
+   * Negative sampling
+  */
   virtual size_t sample_negative_item(const std::unordered_map<size_t, double>& user_map) const {
     size_t random_item;
     while(true) {

@@ -18,7 +18,7 @@ struct CDAEConfig {
   PenaltyType pt = L2;  
   size_t num_dim = 10;
   bool using_adagrad = true;
-  double corruption_ratio = 0.5;
+  double corruption_ratio = 0.5; 
   size_t num_corruptions = 1;
   bool asymmetric = false;
   bool user_factor = true;
@@ -133,13 +133,25 @@ class CDAE : public RecsysModelBase {
     }
   } 
 
+  /**
+   * one CDEA learning algorithm iteration 
+  */
   void train_one_iteration(const Data& train_data) {
-    for (size_t uid = 0; uid < num_users_; ++uid) {
-      auto fit = user_rated_items_.find(uid);
+
+    // for each user
+    for (size_t uid = 0; uid < num_users_; ++uid) { // data_->feature_group_total_dimension(0);
+      
+      // get ratings of user u
+      auto fit = user_rated_items_.find(uid); // data_->get_feature_pair_label_hashtable(0, 1);
+ 
       CHECK(fit != user_rated_items_.end());
       auto& item_set = fit->second;
+
       for (size_t idx = 0; idx < num_corruptions_; ++idx) {
+        // sample CDAE input: corrupted feedback vector 
         auto corrpted_item_set = get_corrputed_input(item_set, corruption_ratio_);
+
+        // train CDAE on user's corrupted input
         train_one_user_corruption(uid, corrpted_item_set, item_set);
       }
     }
@@ -195,6 +207,10 @@ class CDAE : public RecsysModelBase {
     return std::move(ret);
   }
 
+
+  /**
+   * train CDAE on corrupted input of a given user
+  */
   void train_one_user_corruption(size_t uid, 
                                  const std::unordered_map<size_t, double>& input_set, 
                                  const std::unordered_map<size_t, double>& output_set) {
@@ -204,6 +220,7 @@ class CDAE : public RecsysModelBase {
       scale /= (1. - corruption_ratio_);
     }
 
+    // Map input into a latent representation zu (using h(.) mapping function)
     DVector z = get_hidden_values(uid, input_set, scale);
     DVector z_1_z =  DVector::Ones(num_dim_);
     if (! linear_) {
@@ -214,21 +231,35 @@ class CDAE : public RecsysModelBase {
       }
     }
     
-    std::vector<size_t> negative_sampels(output_set.size() * num_neg_);
-    for (size_t idx = 0; idx < negative_sampels.size(); ++idx) {
-      negative_sampels[idx] = sample_negative_item(output_set);
+    // Sample a subset of negative items Su 
+    std::vector<size_t> negative_samples(output_set.size() * num_neg_);
+    for (size_t idx = 0; idx < negative_samples.size(); ++idx) {
+      negative_samples[idx] = sample_negative_item(output_set);
     }
     
     std::unordered_map<size_t, DVector> input_gradient;
     DVector hidden_gradient = DVector::Zero(num_dim_);
 
+    /**
+     * Compute gradients for each item in Ou ∪ Su  
+     * NOTE: no need to compute the gradients on all the outpus
+    */
+     
+    // gradients for Ou (user training items) 
     for (auto& p : output_set) {
       size_t iid = p.first;
+
+      // Compute outputs
       double y = get_output_values(z, iid);
+
+      // Update gradient w.r.t. Wi'
       double gradient = loss_->gradient(y, 1.);
       
+      // Update gradient w.r.t. bi'
       {
         double grad = gradient + lambda_ * b_prime(iid);
+
+        // use adagrad to adapt step size
         if (using_adagrad_) {
           b_prime_ag(iid) += grad * grad;
           grad /= (beta_ + std::sqrt(b_prime_ag(iid)));
@@ -236,6 +267,7 @@ class CDAE : public RecsysModelBase {
         b_prime(iid) -= learn_rate_ * grad;
       }
 
+      // Update parameters
       if (asymmetric_) {
         hidden_gradient += gradient * V.row(iid);
         DVector grad = gradient * z + lambda_ * V.row(iid).transpose();
@@ -259,13 +291,21 @@ class CDAE : public RecsysModelBase {
       }
     }
 
-    for (auto& iid : negative_sampels) {
+    // gradients for Su (subsample of negative items)
+
+    for (auto& iid : negative_samples) {
+      
+      // Compute outputs
       double y = get_output_values(z, iid);
       
+      // Update gradient w.r.t. Wi'
       double gradient = loss_->gradient(y, 0.);
 
+      // Update gradient w.r.t. bi'
       {
         double grad = gradient + lambda_ * b_prime(iid);
+
+        // use adagrad to adapt step size
         if (using_adagrad_) {
           b_prime_ag(iid) += grad * grad;
           grad /= (beta_ + std::sqrt(b_prime_ag(iid)));
@@ -273,6 +313,7 @@ class CDAE : public RecsysModelBase {
         b_prime(iid) -= learn_rate_ * grad;
       }
 
+      // Compute gradient w.r.t. Zu (hidden_gradient)
       if (asymmetric_) {
         hidden_gradient += gradient * V.row(iid);
         DVector grad = gradient * z + lambda_ * V.row(iid).transpose();
@@ -292,6 +333,7 @@ class CDAE : public RecsysModelBase {
       }
     }
  
+
     DVector Uu_grad;
     if (linear_function_) {
       Uu_grad = DVector::Zero(num_dim_);
@@ -330,6 +372,8 @@ class CDAE : public RecsysModelBase {
       Wu.row(uid) -= learn_rate_ * grad;
     }
 
+
+    // Update Wj
     for (auto& p : input_set) {
       size_t jid = p.first;
       DVector grad = DVector::Zero(num_dim_);
@@ -357,10 +401,17 @@ class CDAE : public RecsysModelBase {
     }
   }
 
-
+  
+  /**
+   * sample CDAE input: sample corrupted feedback vector  
+   * generated from the conditional probability
+  */
   std::unordered_map<size_t, double> get_corrputed_input(const std::unordered_map<size_t, double>& input_set, 
                                           double corruption_ratio) const {
     std::unordered_map<size_t, double> rets;
+
+    // non-zero values in yu are randomly dropped out independently 
+    // with probability corruption_ratio (q)
     rets.reserve(static_cast<size_t>(input_set.size() * (1. - corruption_ratio)));
     for (auto& p : input_set) {
       if (Random::uniform() > corruption_ratio) {
@@ -388,6 +439,8 @@ class CDAE : public RecsysModelBase {
       h1 += Wu.row(uid);
     }
 
+    // If mapping function is neither linear nor tanh
+    // use identity
     if (! linear_) {
       if (! tanh_) {
       h1 = h1.unaryExpr([](double x) {
@@ -415,6 +468,9 @@ class CDAE : public RecsysModelBase {
     return h1;
   }
 
+  /**
+   * Compute output f(Wi.zu + bi')
+  */ 
   double get_output_values(const DVector& z, size_t idx) const {
     double h2 = 0; 
     if (asymmetric_) {

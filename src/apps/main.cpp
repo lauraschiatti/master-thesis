@@ -25,9 +25,9 @@
 */
 
 // files
-// DATASET: movieLens
+// DATASET: movielens
 std::string dataset = "movielens";
-DEFINE_string(input_file, "data/sample_movielens_data.txt", "input data");
+DEFINE_string(input_file, "data/movielens_data.txt", "input data");
 DEFINE_string(cache_file, dataset + ".bin", "cache file"); // save prepared data
 DEFINE_string(train_cache_file, dataset + ".train.bin", "cached train file"); // save splitted train data
 DEFINE_string(test_cache_file, dataset + ".test.bin", "cached test file"); // save splitted test data
@@ -54,17 +54,16 @@ DEFINE_bool(scaled, false, "scaled input");
 DEFINE_bool(user_factor, true, "using user factor");
 DEFINE_int32(cnum, 1, "Num of Corruptions");
 DEFINE_double(cratio, 0, "Corruption Ratio");
-DEFINE_string(loss_type, "SQUARE", "Loss function type");
+DEFINE_string(loss_type, "LOGISTIC", "Loss function type");
 DEFINE_double(beta, 1., "Beta for adagrad");
 
 int main(int argc, char* argv[]) {
   using namespace libcf;
   
-  // set the log destination
-  FLAGS_log_dir = "./log"; 
+  FLAGS_log_dir = "./log"; // set directory to save log files
   google::SetLogDestination(google::GLOG_INFO, "log/movielens_implicit.log");
   google::InitGoogleLogging(argv[0]);
-  
+
   gflags::SetUsageMessage("movielens");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
@@ -93,7 +92,7 @@ int main(int argc, char* argv[]) {
     };
 
     Data data;
-    data.load(FLAGS_input_file, RECSYS, line_parser, true);
+    data.load(FLAGS_input_file, RECSYS, line_parser, false); // skip_header=true
     save(data, FLAGS_cache_file);  
   }
 
@@ -146,6 +145,7 @@ int main(int argc, char* argv[]) {
   Random::timed_seed();
 
   {
+    std::cout << "METHOD: Popularity\n";
     Popularity pop_model;
     Solver<Popularity> solver(pop_model);
     solver.train(train, test, {TOPN});
@@ -235,7 +235,7 @@ int main(int argc, char* argv[]) {
     
     CDAE model(config);
     Solver<CDAE> solver(model, 50);
-    solver.train(train, test, {TOPN});
+    solver.train(train, test, {TOPN}); // train, validation
     // solver.test(test, {TOPN});
   }
 

@@ -13,6 +13,7 @@ void Solver<Model>::train(const Data& train_data,
 
   double train_loss = 0;
 
+  // Evaluation metrics
   std::vector<std::shared_ptr<Evaluation<Model>>> evaluations(eval_types.size());
   for (size_t idx = 0; idx < eval_types.size(); ++idx) {
     evaluations[idx] = Evaluation<Model>::create(eval_types[idx]);
@@ -20,10 +21,13 @@ void Solver<Model>::train(const Data& train_data,
 
   size_t iteration = 0;
   model_->reset(train_data);
-  pre_train(train_data, validation_data);
+  pre_train(train_data, validation_data); // not implemented!
 
   Timer t;
   
+  /*
+  * iterations, time and train Loss
+  */
   LOG(INFO) << std::string(110, '-') << std::endl;
   {
     std::stringstream ss;
@@ -50,6 +54,10 @@ void Solver<Model>::train(const Data& train_data,
     LOG(INFO) << ss.str();
   }
 
+  /*
+  * Training iterations
+  */
+
   bool stop = false;
   while(!stop) {
 
@@ -72,9 +80,13 @@ void Solver<Model>::train(const Data& train_data,
     }
 
     // check conditions
+
+    // while iter < maxIter or error on validation set decreases do
+
     if (iteration >= max_iteration_) {
       stop = true;
     }
+    
     // other conditions
   }
 
