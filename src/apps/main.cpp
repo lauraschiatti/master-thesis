@@ -9,85 +9,113 @@
 #include <base/io/file.hpp>
 #include <base/timer.hpp>
 #include <base/random.hpp>
-// #include <model/linear_model.hpp>
-// #include <model/factor_model.hpp>
-#include <model/recsys/popularity.hpp>
-// #include <model/recsys/itemcf.hpp>
-// #include <model/recsys/usercf.hpp>
-// #include <solver/sgd.hpp>
+
 #include <solver/solver.hpp>
-// #include <model/recsys/imf.hpp>
-// #include <model/recsys/bpr.hpp>
 #include <model/recsys/cdae.hpp>
 
-/*
-* Define flags
-*/
 
-// files
-// DATASET: movielens
+/**
+ * Data files
+*/ 
+std::string dataset_dir = "data/";
+std::string dataset_bin_dir = "data/bin/";
 std::string dataset = "movielens";
-DEFINE_string(input_file, "data/movielens_data.txt", "input data");
-DEFINE_string(cache_file, dataset + ".bin", "cache file"); // save prepared data
-DEFINE_string(train_cache_file, dataset + ".train.bin", "cached train file"); // save splitted train data
-DEFINE_string(test_cache_file, dataset + ".test.bin", "cached test file"); // save splitted test data
 
-// task
-DEFINE_string(task, "train", "Task type");
+DEFINE_string(input_file, dataset_dir + "sample_"+ dataset +"_data.txt", "input data");
 
-// methods
+// dateaset binaties 
+DEFINE_string(cache_file, dataset_bin_dir + dataset + ".bin", "cache file"); 
+DEFINE_string(train_cache_file, dataset_bin_dir + dataset + ".train.bin", "cached train file"); 
+DEFINE_string(test_cache_file, dataset_bin_dir + dataset + ".test.bin", "cached test file"); 
+
+/**
+ * Task type: train, test
+*/
+DEFINE_string(task, "train", "Task type"); 
+DEFINE_double(holdout_perc, 0.2, "Holdout percentage");  
+
+/**
+ * Recsys models: NONE, CDAE
+*/
 DEFINE_int32(seed, 20141119, "Random Seed");
 DEFINE_string(method, "CDAE", "Which Method to use"); // "NONE"
 
-// model settings
-DEFINE_int32(num_dim, 10, "Num of latent dimensions");
-DEFINE_int32(num_neg, 5, "Num of negative samples");
-DEFINE_double(learn_rate, 0.1, "Learning Rate");
-DEFINE_bool(adagrad, true, "Use AdaGrad");
-DEFINE_bool(bias, true, "Use bias term");
-DEFINE_bool(linear_function, false, "Using Linear Mapping Function");
-DEFINE_bool(tanh, false, "Using tanh NonLinear Function");
-DEFINE_bool(asym, false, "Asymmetric DAE");
-DEFINE_bool(linear, false, "Linear DAE");
-DEFINE_bool(linear_output, false, "Linear output DAE");
-DEFINE_bool(scaled, false, "scaled input");
-DEFINE_bool(user_factor, true, "using user factor");
-DEFINE_int32(cnum, 1, "Num of Corruptions");
+/**
+ * Model parameters
+*/
+DEFINE_int32(num_dim, 50, "Num of latent dimensions"); // K hidden neurons
+DEFINE_int32(num_neg, 5, "Num of negative samples");  // NS
+
+// corruption level
+DEFINE_int32(cnum, 1, "Num of Corruptions"); // default
 DEFINE_double(cratio, 0, "Corruption Ratio");
-DEFINE_string(loss_type, "LOGISTIC", "Loss function type");
-DEFINE_double(beta, 1., "Beta for adagrad");
+
+// scaled input
+DEFINE_bool(scaled, false, "scaled input"); // default
+
+// user factor (CDAE vs DAE)
+DEFINE_bool(user_factor, true, "using user factor"); // default
+
+// training using SGD (and AdaGrad)
+DEFINE_int32(max_iteration, 50, "Max num of iterations"); // default
+DEFINE_double(learn_rate, 0.1, "Learning Rate"); //  η
+DEFINE_bool(adagrad, true, "Use AdaGrad"); 
+DEFINE_double(beta, 1., "Beta for adagrad"); // β
+
+// activation function h(.)
+DEFINE_bool(linear_function, false, "Using Linear Mapping Function");
+DEFINE_bool(tanh, false, "Using tanh NonLinear Function"); // sigmoid/tanh
+
+// loss and regularization
+DEFINE_string(loss_type, "SQUARE", "Loss function type"); // l(.)
+// by default: lambda = 0.01;  // λ   
+// and PenaltyType pt = L2;  // L2-norm regularization
+  
+// DAE
+DEFINE_bool(asym, false, "Asymmetric DAE"); // default
+DEFINE_bool(linear, false, "Linear DAE");  // with linear activation function
+
 
 int main(int argc, char* argv[]) {
   using namespace libcf;
   
+  /**
+   * Set google's logging library.
+  */
   FLAGS_log_dir = "./log"; // set directory to save log files
+  // FLAGS_logtostderr = 1; // log messages to the console instead of logfiles.
   google::SetLogDestination(google::GLOG_INFO, "log/movielens_implicit.log");
-  google::InitGoogleLogging(argv[0]);
+  google::InitGoogleLogging(argv[0]); // Initialize Google's logging library.
 
-  gflags::SetUsageMessage("movielens");
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  // gflags::SetUsageMessage("movielens");
+  // gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  /*
-  * Train-test tasks
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Data preparation
   */
 
-  // FLAGS_task == "prepare" 
-  // -----------------------
+  int line_size;
+  std::string split;
 
+  if (dataset == "movielens") {
+    // data format: UserID::MovieID::Rating::Timestamp
+    line_size = 4; 
+    split = ": ";
+  }
+
+  // get data
   std::ifstream data_file;
-  data_file.open(dataset + ".bin");
-   
-  if (!data_file){ // dataset file does not exist
+  data_file.open(FLAGS_cache_file);
+  
+  if (!data_file){ // dataset file does not exist 
     std::cout<<"TASK: prepare\n";
 
-    int line_size = 4; // Dataset format: UserID::MovieID::Rating::Timestamp
-
     auto line_parser = [&](const std::string& line) {
-      // auto rets = split_line(line, " ");
-      auto rets = split_line(line, ": ");
+      // auto rets = split_line(line, " "); // yelp
+      auto rets = split_line(line, split);
       CHECK_EQ(rets.size(), line_size); 
-      //if (std::stod(rets[2]) < 4) 
-      //  return std::vector<std::string>{};
       return std::vector<std::string>{rets[0], rets[1], "1"};
     };
 
@@ -96,22 +124,21 @@ int main(int argc, char* argv[]) {
     save(data, FLAGS_cache_file);  
   }
 
-
-  //FLAGS_task == "split"
-  // --------------------
-  
+  // split data
   std::ifstream train_file;
-  train_file.open(dataset + ".train.bin");
+  train_file.open(FLAGS_train_cache_file);
    
   if (!train_file){ // train dataset file does not exist
     std::cout<<"TASK: split\n";
+
+    Random::seed(FLAGS_seed); // use the same seed to split the data 
 
     Data data;
     load(FLAGS_cache_file, data);
     LOG(INFO) << data; 
     
     Data train, test;
-    data.random_split_by_feature_group(train, test, 0, 0.2);
+    data.random_split_by_feature_group(train, test, 0, FLAGS_holdout_perc);
     LOG(INFO) << train;
     LOG(INFO) << test;
     
@@ -119,13 +146,20 @@ int main(int argc, char* argv[]) {
     save(test, FLAGS_test_cache_file);
   }  
 
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Models 
+  */
+
   Data train, test;
 
   if (FLAGS_task == "train") {
     std::cout << "TASK: train\n";
 
     Random::seed(FLAGS_seed); // use the same seed to split the data 
-
+    
     Data data;
     load(FLAGS_cache_file, data);
     LOG(INFO) << data; 
@@ -137,70 +171,16 @@ int main(int argc, char* argv[]) {
     std::cout << "TASK: test\n";
     load(FLAGS_train_cache_file, train);
     load(FLAGS_test_cache_file, test);
-  } //else {
-  //   std::cout<<"TASK: else\n";
-  //   return -1;
-  // }
-
-  Random::timed_seed();
-
-  {
-    std::cout << "METHOD: Popularity\n";
-    Popularity pop_model;
-    Solver<Popularity> solver(pop_model);
-    solver.train(train, test, {TOPN});
+  
   }
 
-  // if (FLAGS_method == "ITEMCF") {
-  //   ItemCF model(Jaccard, 50);
-  //   Solver<ItemCF> solver(model);
-  //   solver.train(train, test, {TOPN});
-  // }
+  // std::cout << "TASK: loading data ... \n";
 
-  // if (FLAGS_method == "MF") {
-  //   IMFConfig config;
-  //   config.num_dim = FLAGS_num_dim;
-  //   config.num_neg = FLAGS_num_neg;
-  //   config.using_adagrad = FLAGS_adagrad;
-  //   config.using_bias_term = FLAGS_bias;
-  //   if (FLAGS_loss_type == "SQUARE") {
-  //     config.lt = SQUARE;
-  //   } else if (FLAGS_loss_type == "HINGE") {
-  //     config.lt = HINGE;
-  //   } else if (FLAGS_loss_type == "LOG") {
-  //     config.lt = LOG;
-  //   } else if (FLAGS_loss_type == "CE") {
-  //     config.lt = CROSS_ENTROPY;
-  //   } else {
-  //     LOG(FATAL) << "UNKNOWN LOSS";
-  //   }
+  // Data train, test;
+  // load(FLAGS_train_cache_file, train);
+  // load(FLAGS_test_cache_file, test);
 
-  //   IMF model(config);
-  //   Solver<IMF> solver(model, 50);
-  //   solver.train(train, test, {TOPN});
-  // }
-
-  // if (FLAGS_method == "BPR") {
-  //   BPRConfig config;
-  //   config.num_dim = FLAGS_num_dim;
-  //   config.num_neg = FLAGS_num_neg;
-  //   config.using_adagrad = FLAGS_adagrad;
-  //   if (FLAGS_loss_type == "SQUARE") {
-  //     config.lt = SQUARE;
-  //   } else if (FLAGS_loss_type == "HINGE") {
-  //     config.lt = HINGE;
-  //   } else if (FLAGS_loss_type == "LOG") {
-  //     config.lt = LOG;
-  //   } else if (FLAGS_loss_type == "LOGISTIC") {
-  //     config.lt = LOGISTIC;
-  //   } else {
-  //     LOG(FATAL) << "UNKNOWN LOSS";
-  //   }
-
-  //   BPR model(config);
-  //   Solver<BPR> solver(model, 50);
-  //   solver.train(train, test, {TOPN});
-  // }
+  Random::timed_seed();
 
   if (FLAGS_method == "CDAE") {
     std::cout << "METHOD: CDAE\n";
@@ -219,6 +199,7 @@ int main(int argc, char* argv[]) {
     config.beta = FLAGS_beta; 
     config.linear_function = FLAGS_linear_function;
     config.tanh = FLAGS_tanh;
+    
     if (FLAGS_loss_type == "SQUARE") {
       config.lt = SQUARE;
     } else if (FLAGS_loss_type == "LOG") {
@@ -234,7 +215,7 @@ int main(int argc, char* argv[]) {
     }
     
     CDAE model(config);
-    Solver<CDAE> solver(model, 50);
+    Solver<CDAE> solver(model, FLAGS_max_iteration);
     solver.train(train, test, {TOPN}); // train, validation
     // solver.test(test, {TOPN});
   }

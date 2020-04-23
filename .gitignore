@@ -31,8 +31,14 @@
 *.out
 *.app
 
-# Binary files
-*.bin
+# Visual studio code
+.vscode/
+
+# MacOS
+.DS_Store
+
+# Data files
+data/
 
 # Log files
 log/
@@ -42,11 +48,7 @@ movielens
 */run_all_tests.*
 */run_all_tests.INFO
 
-# Visual studio code
-.vscode/
 
-# MacOS
-.DS_Store
 
 
 
