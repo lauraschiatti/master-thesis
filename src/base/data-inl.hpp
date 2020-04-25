@@ -95,12 +95,12 @@ std::ostream& operator<< (std::ostream& stream, const Data& data) {
   for (auto& fg_info : data.data_info_->feature_group_infos_) {
     stream << "\tFeature group " << idx++ << " -> " << fg_info << std::endl;
   }
-  stream << "Head of the data set:\n"; 
-  size_t num_lines = std::min(size_t{10}, data.instances_.size());
-  for (size_t line_idx = 0; line_idx < num_lines; ++line_idx) {
-    auto& ins = data.instances_[line_idx];
-    stream << "  " << ins << std::endl;
-  }
+  // stream << "Head of the data set:\n"; 
+  // size_t num_lines = std::min(size_t{10}, data.instances_.size());
+  // for (size_t line_idx = 0; line_idx < num_lines; ++line_idx) {
+  //   auto& ins = data.instances_[line_idx];
+  //   stream << "  " << ins << std::endl;
+  // }
   return stream;
 }
 

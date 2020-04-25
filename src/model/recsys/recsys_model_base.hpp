@@ -34,7 +34,8 @@ class RecsysModelBase : public ModelBase {
   }
 
   /**
-   * Set number of users, items and ratings 
+   * Reset the model parameters 
+   * and number of users, items and ratings 
   */
   virtual void reset(const Data& data_set) {
     ModelBase::reset(data_set);
@@ -43,6 +44,9 @@ class RecsysModelBase : public ModelBase {
     num_items_ = data_->feature_group_total_dimension(1);
   }
 
+  /**
+   * Prediction
+  */
   virtual double predict_user_item_rating(size_t uid, size_t iid) const {
     return 0.;
   }
@@ -54,9 +58,9 @@ class RecsysModelBase : public ModelBase {
   }
   
   /**
-   * Negative sampling
+   * Negative items sampling
   */
-  virtual size_t sample_negative_item(const std::unordered_map<size_t, double>& user_map) const {
+  virtual size_t sample_negative_item(const  unordered_map<size_t, double>& user_map) const {
     size_t random_item;
     while(true) {
       random_item = rand() % num_items_;
@@ -69,7 +73,7 @@ class RecsysModelBase : public ModelBase {
     return random_item;
   }
     
-  virtual size_t sample_negative_item(const std::unordered_set<size_t>& user_set) const {
+  virtual size_t sample_negative_item(const  unordered_set<size_t>& user_set) const {
     size_t random_item;
     while(true) {
       random_item = rand() % num_items_;
@@ -87,12 +91,12 @@ class RecsysModelBase : public ModelBase {
   }
 
   // required by evaluation measure TOPN
-  virtual std::vector<size_t> recommend(size_t uid, size_t topk,
-                                        const std::unordered_map<size_t, double>& rated_item_map) const {
+  virtual  vector<size_t> recommend(size_t uid, size_t topk,
+                                        const  unordered_map<size_t, double>& rated_item_map) const {
     size_t item_id = 0;
     size_t item_id_end = data_->feature_group_total_dimension(1);
   
-    Heap<std::pair<size_t, double>> topk_heap(sort_by_second_desc<size_t, double>, topk);
+    Heap< pair<size_t, double>> topk_heap(sort_by_second_desc<size_t, double>, topk);
     double pred;
     for (; item_id != item_id_end; ++item_id) {
       if (rated_item_map.count(item_id)) {
@@ -107,18 +111,18 @@ class RecsysModelBase : public ModelBase {
     }
     CHECK_EQ(topk_heap.size(), topk);
     auto topk_heap_vec = topk_heap.get_sorted_data();
-    std::vector<size_t> ret(topk);
-    std::transform(topk_heap_vec.begin(), topk_heap_vec.end(),
+     vector<size_t> ret(topk);
+     transform(topk_heap_vec.begin(), topk_heap_vec.end(),
                    ret.begin(),
-                   [](const std::pair<size_t, double>& p) {
+                   [](const  pair<size_t, double>& p) {
                    return p.first;
                    });
-    return std::move(ret);
+    return  move(ret);
   }
 
  protected:
   size_t num_users_, num_items_;
-  std::unordered_map<size_t, std::unordered_map<size_t, double>> user_rated_items_;
+   unordered_map<size_t,  unordered_map<size_t, double>> user_rated_items_;
 };
 
 } // namespace

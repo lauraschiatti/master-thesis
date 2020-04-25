@@ -16,7 +16,7 @@ struct CDAEConfig {
   double learn_rate = 0.1;   
   LossType lt = LOGISTIC; 
   PenaltyType pt = L2;  
-  size_t num_dim = 10;
+  size_t num_dim = 10; // K: num of latent dimensions (neurons in the hidden layer)
   bool using_adagrad = true;
   double corruption_ratio = 0.5; 
   size_t num_corruptions = 1;
@@ -27,7 +27,7 @@ struct CDAEConfig {
   bool scaled = true;
   double beta = 0.;
   bool linear_function = false;
-  bool tanh = false;
+  bool tanh = false;  
 };
 
 /* 
@@ -51,8 +51,8 @@ class CDAE : public RecsysModelBase {
     num_neg_ = mcfg.num_neg;
     scaled_ = mcfg.scaled;
     beta_ = mcfg.beta;
-    linear_function_ = mcfg.linear_function;
-    tanh_ = mcfg.tanh;
+    linear_function_ = mcfg.linear_function; 
+    tanh_ = mcfg.tanh; // sigmoid (tanh = false), tanh (tanh = true)
 
     LOG(INFO) << "CDAE Configure: \n" 
         << "\t{lambda: " << lambda_ << "}, "
@@ -75,8 +75,11 @@ class CDAE : public RecsysModelBase {
 
   CDAE() : CDAE(CDAEConfig()) {}
   
+  /**
+   * Prediction error on training data
+  */
   double data_loss(const Data& data_set, size_t sample_size=0) const {
-    std::atomic<double> rets(0.);
+     atomic<double> rets(0.);
     
     parallel_for (0, num_users_, [&](size_t uid) {
       auto fit = user_rated_items_.find(uid);
@@ -84,7 +87,7 @@ class CDAE : public RecsysModelBase {
       auto& item_set = fit->second;
       double user_rets = 0;
       for (size_t jid = 0; jid < num_corruptions_; ++jid) {
-        auto corrpted_item_set = get_corrputed_input(item_set, corruption_ratio_);
+        auto corrpted_item_set = get_corrupted_input(item_set, corruption_ratio_);
         double scale = 1;
         if (scaled_) {
          scale /=  (1. - corruption_ratio_) ;
@@ -100,16 +103,22 @@ class CDAE : public RecsysModelBase {
     return rets;
   }
    
+  /**
+   * Regularization Loss
+  */ 
   double penalty_loss() const {
     return 0.5 * lambda_ * (penalty_->evaluate(W) + penalty_->evaluate(V)
                             + penalty_->evaluate(Wu) + penalty_->evaluate(b) 
                             + penalty_->evaluate(b_prime)); 
   }
 
+  /**
+   * Reset the model parameters 
+  */
   void reset(const Data& data_set) {
     RecsysModelBase::reset(data_set);
 
-    double init_scale = 4. * std::sqrt(6. / static_cast<double>(num_items_ + num_dim_));
+    double init_scale = 4. *  sqrt(6. / static_cast<double>(num_items_ + num_dim_));
     W = DMatrix::Random(num_items_, num_dim_) * init_scale;
     W_ag = DMatrix::Constant(num_items_, num_dim_, 0.0001);
     if (asymmetric_) {
@@ -134,141 +143,129 @@ class CDAE : public RecsysModelBase {
   } 
 
   /**
-   * one CDEA learning algorithm iteration 
+   * One CDEA learning algorithm iteration 
   */
   void train_one_iteration(const Data& train_data) {
 
-    // for each user
-    for (size_t uid = 0; uid < num_users_; ++uid) { // data_->feature_group_total_dimension(0);
+    // for all users
+    for (size_t uid = 0; uid < num_users_; ++uid) { 
       
-      // get ratings of user u
-      auto fit = user_rated_items_.find(uid); // data_->get_feature_pair_label_hashtable(0, 1);
- 
-      CHECK(fit != user_rated_items_.end());
-      auto& item_set = fit->second;
+      // get rated items for user u
+      auto it = user_rated_items_.find(uid);  // iterator (key/value, first/second)
+      CHECK(it != user_rated_items_.end()); // iterator one past the end 
+      auto& item_set = it->second; // value in the map
 
+      // for each corruption
       for (size_t idx = 0; idx < num_corruptions_; ++idx) {
-        // sample CDAE input: corrupted feedback vector 
-        auto corrpted_item_set = get_corrputed_input(item_set, corruption_ratio_);
+        // CDAE input: sample corrupted rating vector 
+        auto corrupted_item_set = get_corrupted_input(item_set, corruption_ratio_);
 
         // train CDAE on user's corrupted input
-        train_one_user_corruption(uid, corrpted_item_set, item_set);
+        train_one_user_corruption(uid, corrupted_item_set, item_set);
       }
     }
   }
   
-  DMatrix get_user_representations() {
-    
-    DMatrix user_vec(num_users_, num_dim_);
+  /**
+   * CDAE input: sample corrupted rating vector 
+   * using mask-out/drop-out corruption
+  */
+   unordered_map<size_t, double> get_corrupted_input(const  unordered_map<size_t, double>& input_set, 
+                                          double corruption_ratio) const {
+     unordered_map<size_t, double> rets;
 
-    for (size_t uid = 0; uid < num_users_; ++uid) {
-      auto fit = user_rated_items_.find(uid);
-      CHECK(fit != user_rated_items_.end());
-      user_vec.row(uid) = get_hidden_values(uid, fit->second);
-    }
-  
-    return std::move(user_vec);
-  }
-
-  // required by evaluation measure TOPN
-  std::vector<size_t> recommend(size_t uid, size_t topk,
-                                const std::unordered_map<size_t, double>& rated_item_set) const {
-    size_t item_id = 0;
-    size_t item_id_end = item_id + data_->feature_group_total_dimension(1);
-     
-    DVector z = DVector::Zero(num_dim_);
-    if (corruption_ratio_ != 1.) { 
-      z = get_hidden_values(uid, rated_item_set);
-    } else { 
-      z = get_hidden_values(uid, std::unordered_map<size_t, double>{});
-    }
-
-    Heap<std::pair<size_t, double>> topk_heap(sort_by_second_desc<size_t, double>, topk);
-    double pred;
-    for (; item_id != item_id_end; ++item_id) {
-      if (rated_item_set.count(item_id)) {
-        continue;
-      }
-      pred = get_output_values(z, item_id);
-      if (topk_heap.size() < topk) {
-        topk_heap.push({item_id, pred});
-      } else {
-        topk_heap.push_and_pop({item_id, pred});
+    // non-zero values in yu are randomly dropped out independently 
+    // with probability corruption_ratio (q)
+    rets.reserve(static_cast<size_t>(input_set.size() * (1. - corruption_ratio)));
+    for (auto& p : input_set) {
+      if (Random::uniform() > corruption_ratio) {
+        rets.insert(p);
       }
     }
-    CHECK_EQ(topk_heap.size(), topk);
-    auto topk_heap_vec = topk_heap.get_sorted_data();
-    std::vector<size_t> ret(topk);
-    std::transform(topk_heap_vec.begin(), topk_heap_vec.end(),
-                   ret.begin(),
-                   [](const std::pair<size_t, double>& p) {
-                   return p.first;
-                   });
-    return std::move(ret);
+    return rets;
   }
-
 
   /**
-   * train CDAE on corrupted input of a given user
+   * Train CDAE on corrupted input of a given user
   */
   void train_one_user_corruption(size_t uid, 
-                                 const std::unordered_map<size_t, double>& input_set, 
-                                 const std::unordered_map<size_t, double>& output_set) {
+                                const  unordered_map<size_t, double>& input_set,  // corrupted item set
+                                const  unordered_map<size_t, double>& output_set)  // 
+                                {
     
+    // scale input
     double scale = 1.;
     if (scaled_) {
       scale /= (1. - corruption_ratio_);
     }
 
-    // Map input into a latent representation zu (using h(.) mapping function)
+    // map input into a hidden representation Zu 
+    // apply h(.) mapping function
     DVector z = get_hidden_values(uid, input_set, scale);
+    
+    // ????
     DVector z_1_z =  DVector::Ones(num_dim_);
     if (! linear_) {
       if (! tanh_) {
+        // sigmoid activation
         z_1_z = z - z.cwiseProduct(z);
       } else {
+        // tanh activation
         z_1_z = DVector::Ones(num_dim_) - z.cwiseProduct(z); 
       }
     }
     
     // Sample a subset of negative items Su 
-    std::vector<size_t> negative_samples(output_set.size() * num_neg_);
+    vector<size_t> negative_samples(output_set.size() * num_neg_);
+    
     for (size_t idx = 0; idx < negative_samples.size(); ++idx) {
       negative_samples[idx] = sample_negative_item(output_set);
     }
     
-    std::unordered_map<size_t, DVector> input_gradient;
-    DVector hidden_gradient = DVector::Zero(num_dim_);
 
     /**
-     * Compute gradients for each item in Ou ∪ Su  
-     * NOTE: no need to compute the gradients on all the outpus
+     * Learn the parameters of CDAE: update W,W,V,b,b′
+     * NOTE: no need to compute the gradients on all the outputs, 
+     *       compute the gradients on the items in Ou ∪ Su  
     */
-     
-    // gradients for Ou (user training items) 
-    for (auto& p : output_set) {
-      size_t iid = p.first;
 
-      // Compute outputs
-      double y = get_output_values(z, iid);
+    unordered_map<size_t, DVector> input_gradient;
+    DVector hidden_gradient = DVector::Zero(num_dim_);
 
-      // Update gradient w.r.t. Wi'
-      double gradient = loss_->gradient(y, 1.);
-      
-      // Update gradient w.r.t. bi'
+    // Update Wi' and bi' using items in the Ou(user training items) 
+    // and Su (subsample of negative items
+    // items that user didn't interact with
+
+    for (auto& p : output_set)  // items in Ou set (item_id, rating)
+    {
+      size_t iid = p.first; // item_id
+
+      // Compute output values yui^ = f(.)
+      double y = get_output_values(z, iid); // yui^ 
+
+      // Get loss gradient
+      double target = 1.;   // implicit rating where all the yui are 1
+      double gradient = loss_->gradient(y, target);  // prediction, target value (yui^, yui)
+
+      // Update bi'
+      // ==========
       {
-        double grad = gradient + lambda_ * b_prime(iid);
+        // compute ∂l/∂bi' gradient
+        double grad = gradient + lambda_ * b_prime(iid); //  gradient + λ bi'
 
-        // use adagrad to adapt step size
-        if (using_adagrad_) {
-          b_prime_ag(iid) += grad * grad;
-          grad /= (beta_ + std::sqrt(b_prime_ag(iid)));
+        // update bi' using AdaGrad to adapt step size (Goodfellow AdaGrad form)
+        if (using_adagrad_) { 
+          b_prime_ag(iid) += grad * grad; // accumulate squared gradients: sum(grad^2)
+          grad /= (beta_ +  sqrt(b_prime_ag(iid))); // bi' = grad/(β + sqrt(sum(grad^2)))
         }
-        b_prime(iid) -= learn_rate_ * grad;
+
+        // update bi' without using AdaGrad
+        b_prime(iid) -= learn_rate_ * grad; // bi' = bi' - η.grad
       }
 
-      // Update parameters
-      if (asymmetric_) {
+      // Update Wi'
+      // ==========
+      if (asymmetric_) { // ????
         hidden_gradient += gradient * V.row(iid);
         DVector grad = gradient * z + lambda_ * V.row(iid).transpose();
         if (using_adagrad_) {
@@ -277,44 +274,59 @@ class CDAE : public RecsysModelBase {
         }
         V.row(iid) -= learn_rate_ * grad;
       } else {
-        hidden_gradient += gradient * W.row(iid);
+        
+        hidden_gradient += gradient * W.row(iid); 
+        
+        // compute ∂l/∂Wi' gradient
         if (input_set.count(iid)) {
           input_gradient[iid] = gradient * z;
+
         } else {
           DVector grad = gradient * z + lambda_ * W.row(iid).transpose();
+
+          // update Wi' using adagrad to adapt step size
           if (using_adagrad_) {
-            W_ag.row(iid) += grad.cwiseProduct(grad);
+            W_ag.row(iid) += grad.cwiseProduct(grad); // accumulate squared gradients: sum(grad^2)
+            // Wi' = grad/(sqrt(sum(Wi')) + β)
             grad = grad.cwiseQuotient((W_ag.row(iid).transpose().cwiseSqrt().array()+ beta_).matrix());
           }
-          W.row(iid) -= learn_rate_ * grad;
+
+          // update Wi' without using adagrad
+          W.row(iid) -= learn_rate_ * grad;  // Wi' = Wi' - η.grad
         }
       }
     }
 
-    // gradients for Su (subsample of negative items)
-
-    for (auto& iid : negative_samples) {
+    for (auto& iid : negative_samples) // items in Su set
+    {
+      LOG(INFO) << "negative_samples" << iid;
       
-      // Compute outputs
-      double y = get_output_values(z, iid);
-      
-      // Update gradient w.r.t. Wi'
-      double gradient = loss_->gradient(y, 0.);
+      // Compute output values yu^ = f(.)
+      double y = get_output_values(z, iid); // yu^
 
-      // Update gradient w.r.t. bi'
+      // Get loss gradient
+      double target = 0.;   // items the user didn't interact with
+      double gradient = loss_->gradient(y, target);  // prediction, target value (yui^, yui)
+
+      // Update bi'
+      // ==========
       {
-        double grad = gradient + lambda_ * b_prime(iid);
+        // compute ∂l/∂bi' gradient
+        double grad = gradient + lambda_ * b_prime(iid); //  gradient + λ bi'
 
-        // use adagrad to adapt step size
-        if (using_adagrad_) {
-          b_prime_ag(iid) += grad * grad;
-          grad /= (beta_ + std::sqrt(b_prime_ag(iid)));
+        // update bi' using AdaGrad to adapt step size (Goodfellow AdaGrad form)
+        if (using_adagrad_) { 
+          b_prime_ag(iid) += grad * grad;  // accumulate squared gradients: sum(grad^2)
+          grad /= (beta_ +  sqrt(b_prime_ag(iid))); // bi' = grad/(β + sqrt(sum(grad^2)))
         }
-        b_prime(iid) -= learn_rate_ * grad;
+
+        // update bi' without using AdaGrad
+        b_prime(iid) -= learn_rate_ * grad; // bi' = bi' - η.grad
       }
 
-      // Compute gradient w.r.t. Zu (hidden_gradient)
-      if (asymmetric_) {
+      // Update Wi'
+      // ==========
+      if (asymmetric_) { // ????
         hidden_gradient += gradient * V.row(iid);
         DVector grad = gradient * z + lambda_ * V.row(iid).transpose();
         if (using_adagrad_) {
@@ -322,25 +334,35 @@ class CDAE : public RecsysModelBase {
           grad = grad.cwiseQuotient((V_ag.row(iid).transpose().cwiseSqrt().array() + beta_).matrix());
         }
         V.row(iid) -= learn_rate_ * grad;
+
       } else {
+        
         hidden_gradient += gradient * W.row(iid);
+
+        // compute ∂l/∂Wi' gradient
         DVector grad = gradient * z + lambda_ * W.row(iid).transpose();
+
+        // update Wi' using adagrad to adapt step size
         if (using_adagrad_) {
-          W_ag.row(iid) += grad.cwiseProduct(grad);
+          W_ag.row(iid) += grad.cwiseProduct(grad); // accumulate squared gradients: sum(grad^2)
+          // Wi' = grad/(sqrt(sum(Wi')) + β)
           grad = grad.cwiseQuotient((W_ag.row(iid).transpose().cwiseSqrt().array() + beta_).matrix());
         }
-        W.row(iid) -= learn_rate_ * grad;
+
+        // update Wi' without using adagrad
+        W.row(iid) -= learn_rate_ * grad; // Wi' = Wi' - η.grad
       }
     }
- 
 
+    // Compute Zu gradient ∂l/∂Zu ?????
+    // ========================== 
     DVector Uu_grad;
     if (linear_function_) {
       Uu_grad = DVector::Zero(num_dim_);
-      Uu_grad += Uu.row(uid).transpose() * lambda_;
+      Uu_grad += Uu.row(uid).transpose() * lambda_; 
     }
 
-    // b
+    // b ???
     {
       DVector grad = DVector::Zero(num_dim_);
       //if (!linear_function_) {
@@ -356,6 +378,7 @@ class CDAE : public RecsysModelBase {
       b -= learn_rate_ * grad;
     }
    
+    // Update Vu
     if (user_factor_)
     {   
       DVector grad = DVector::Zero(num_dim_);
@@ -371,7 +394,6 @@ class CDAE : public RecsysModelBase {
       }
       Wu.row(uid) -= learn_rate_ * grad;
     }
-
 
     // Update Wj
     for (auto& p : input_set) {
@@ -401,58 +423,53 @@ class CDAE : public RecsysModelBase {
     }
   }
 
-  
   /**
-   * sample CDAE input: sample corrupted feedback vector  
-   * generated from the conditional probability
+   * Compute latent representation Zu = h(W^T.Yu~ + Vu + b)
+   * using the sum of weighted vectors
   */
-  std::unordered_map<size_t, double> get_corrputed_input(const std::unordered_map<size_t, double>& input_set, 
-                                          double corruption_ratio) const {
-    std::unordered_map<size_t, double> rets;
-
-    // non-zero values in yu are randomly dropped out independently 
-    // with probability corruption_ratio (q)
-    rets.reserve(static_cast<size_t>(input_set.size() * (1. - corruption_ratio)));
-    for (auto& p : input_set) {
-      if (Random::uniform() > corruption_ratio) {
-        rets.insert(p);
-      }
-    }
-    return rets;
-  }
-
-  DVector get_hidden_values(size_t uid, const std::unordered_map<size_t, double>& item_set,
+  DVector get_hidden_values(size_t uid, const  unordered_map<size_t, 
+                            double>& item_set, // corrupted input set
                             double scale = 1.0) const {
-    DVector h1 = DVector::Zero(num_dim_);
     
+    // initialize h vector to zero
+    DVector h1 = DVector::Zero(num_dim_); 
+    
+    // += W^T.Yu~
     for (auto& p : item_set) {
-      size_t iid = p.first;
+      size_t iid = p.first; 
       h1 += W.row(iid) * scale;
     }
     
-    if (linear_function_) {
+    // linear mapping function h(.)
+    if (linear_function_) { 
       h1 = Uu.row(uid).transpose().cwiseProduct(h1);
     }
 
-    h1 += b; 
+    // += Vu
     if (user_factor_) {
       h1 += Wu.row(uid);
     }
 
-    // If mapping function is neither linear nor tanh
-    // use identity
+    // +=b
+    h1 += b; 
+
+    // nonlinear mapping function h(.)
     if (! linear_) {
+    
       if (! tanh_) {
-      h1 = h1.unaryExpr([](double x) {
+        // sigmoid activation
+        h1 = h1.unaryExpr([](double x) { // apply a unary operator coefficient-wise
                         if (x > 18.) {
                         return 1.;
                         } 
                         if (x < -18.) {
                         return 0.;
                         }
-                        return 1. / (1. + std::exp(-x));
+                        return 1. / (1. +  exp(-x));  // 1 / (1 + exp(-x))
                         });
-      } else {
+      } 
+      else {
+        // tanh activation
         h1 = h1.unaryExpr([](double x) {
                           if (x > 9.) {
                             return 1.;
@@ -460,40 +477,105 @@ class CDAE : public RecsysModelBase {
                           if (x < -9.) {
                             return -1.;
                           }  
-                          double r = std::exp(-2. * x);
-                          return (1. - r) / (1. + r); 
+                          double r =  exp(-2. * x);
+                          return (1. - r) / (1. + r);  // (1 - exp(-2x)) / (1 + exp(-2x))
                         });
       }
     }
+
     return h1;
   }
 
   /**
-   * Compute output f(Wi.zu + bi')
+   * Latent representation is mapped back to the orignal input space
+   * Compute output yu^ = f(Wi'^T.Zu + bi')
+   * f(.) is an identity function
   */ 
   double get_output_values(const DVector& z, size_t idx) const {
     double h2 = 0; 
     if (asymmetric_) {
-      h2 += V.row(idx).dot(z) + b_prime(idx);
+      h2 += V.row(idx).dot(z) + b_prime(idx); // Vi'^T.Zu + bi'
     } else {
-      h2 += W.row(idx).dot(z) + b_prime(idx);
+      h2 += W.row(idx).dot(z) + b_prime(idx); // Wi^T.Zu + bi'
     }
     return h2;
   }
 
+
+  DMatrix get_user_representations() {
+    
+    DMatrix user_vec(num_users_, num_dim_);
+
+    for (size_t uid = 0; uid < num_users_; ++uid) {
+      auto fit = user_rated_items_.find(uid);
+      CHECK(fit != user_rated_items_.end());
+      user_vec.row(uid) = get_hidden_values(uid, fit->second);
+    }
+  
+    return  move(user_vec);
+  }
+
+  /**
+   * Recommendation
+  */
+  // required by evaluation measure TOPN
+   vector<size_t> recommend(size_t uid, size_t topk,
+                                const  unordered_map<size_t, double>& rated_item_set) const {
+    size_t item_id = 0;
+    size_t item_id_end = item_id + data_->feature_group_total_dimension(1);
+     
+    DVector z = DVector::Zero(num_dim_);
+    if (corruption_ratio_ != 1.) { 
+      z = get_hidden_values(uid, rated_item_set);
+    } else { 
+      z = get_hidden_values(uid,  unordered_map<size_t, double>{});
+    }
+
+    Heap< pair<size_t, double>> topk_heap(sort_by_second_desc<size_t, double>, topk);
+    double pred;
+    for (; item_id != item_id_end; ++item_id) {
+      if (rated_item_set.count(item_id)) {
+        continue;
+      }
+      pred = get_output_values(z, item_id);
+      if (topk_heap.size() < topk) {
+        topk_heap.push({item_id, pred});
+      } else {
+        topk_heap.push_and_pop({item_id, pred});
+      }
+    }
+    CHECK_EQ(topk_heap.size(), topk);
+    auto topk_heap_vec = topk_heap.get_sorted_data();
+     vector<size_t> ret(topk);
+     transform(topk_heap_vec.begin(), topk_heap_vec.end(),
+                   ret.begin(),
+                   [](const  pair<size_t, double>& p) {
+                   return p.first;
+                   });
+    return  move(ret);
+  }
+
+
+
  private:
 
-  DMatrix W;
-  DMatrix V;
-  DMatrix W_ag;
-  DMatrix V_ag;
-  DMatrix Wu;
-  DMatrix Wu_ag;
-  DVector b, b_prime, bu;
+  // Model params: W, W', V, b, b'
+  DMatrix W; // W': weights between nodes in the hidden layer and the output layer
+
+  // W: weights vector between the item input nodes and the nodes in the hidden layer
+  DMatrix V; // ==> asymmetric
+
+  DMatrix Wu; // Vu: weight vector for the user input node 
+  DVector b; // b: weight vector for the bias node in the hidden layer
+  DVector b_prime; // b': offset vector for the output layer
+  DVector bu; // bu: not used!
+  DMatrix Uu; // Zu: latent representation 
+
+  // Model params updated using Adagrad: W, W', V,b, b'
+  DMatrix W_ag, V_ag, Wu_ag, Uu_ag;
   DVector b_ag, b_prime_ag, bu_ag;
-  DMatrix Uu;
-  DMatrix Uu_ag;
-  size_t num_dim_ = 0.;
+ 
+  size_t num_dim_ = 0.;  
   double learn_rate_ = 0.;
   double lambda_ = 0.;  
   double corruption_ratio_ = 0.5;
@@ -506,7 +588,7 @@ class CDAE : public RecsysModelBase {
   bool scaled_ = true;
   double beta_ = 0.; 
   bool linear_function_ = false;
-  bool tanh_ = false;
+  bool tanh_ = false; 
 };
 
 } // namespace

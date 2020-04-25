@@ -21,7 +21,7 @@ std::string dataset_dir = "data/";
 std::string dataset_bin_dir = "data/bin/";
 std::string dataset = "movielens";
 
-DEFINE_string(input_file, dataset_dir + "sample_"+ dataset +"_data.txt", "input data");
+DEFINE_string(input_file, dataset_dir + dataset +"_data.txt", "input data"); 
 
 // dateaset binaties 
 DEFINE_string(cache_file, dataset_bin_dir + dataset + ".bin", "cache file"); 
@@ -63,7 +63,7 @@ DEFINE_bool(adagrad, true, "Use AdaGrad");
 DEFINE_double(beta, 1., "Beta for adagrad"); // β
 
 // activation function h(.)
-DEFINE_bool(linear_function, false, "Using Linear Mapping Function");
+DEFINE_bool(linear_function, true, "Using Linear Mapping Function");
 DEFINE_bool(tanh, false, "Using tanh NonLinear Function"); // sigmoid/tanh
 
 // loss and regularization
