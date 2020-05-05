@@ -16,11 +16,11 @@ struct CDAEConfig {
   double learn_rate = 0.1;   
   LossType lt = LOGISTIC; 
   PenaltyType pt = L2;  
-  size_t num_dim = 10; // K: num of latent dimensions (neurons in the hidden layer)
+  size_t num_dim = 10; 
   bool using_adagrad = true;
   double corruption_ratio = 0.5; 
   size_t num_corruptions = 1;
-  bool asymmetric = false;
+  bool asymmetric = false; 
   bool user_factor = true;
   bool linear = false;
   size_t num_neg = 5;
@@ -86,13 +86,17 @@ class CDAE : public RecsysModelBase {
       CHECK(fit != user_rated_items_.end());
       auto& item_set = fit->second;
       double user_rets = 0;
+      
       for (size_t jid = 0; jid < num_corruptions_; ++jid) {
         auto corrpted_item_set = get_corrupted_input(item_set, corruption_ratio_);
         double scale = 1;
+        
         if (scaled_) {
          scale /=  (1. - corruption_ratio_) ;
         }
+        
         auto z = get_hidden_values(uid, corrpted_item_set, scale);
+        
         for (auto& p : item_set) {
           size_t iid = p.first;
           user_rets += loss_->evaluate(get_output_values(z, iid), 1.);
@@ -121,14 +125,17 @@ class CDAE : public RecsysModelBase {
     double init_scale = 4. *  sqrt(6. / static_cast<double>(num_items_ + num_dim_));
     W = DMatrix::Random(num_items_, num_dim_) * init_scale;
     W_ag = DMatrix::Constant(num_items_, num_dim_, 0.0001);
+    
     if (asymmetric_) {
       V = DMatrix::Random(num_items_, num_dim_) * init_scale;
       V_ag = DMatrix::Constant(num_items_, num_dim_, 0.0001);
     } 
+
     if (user_factor_) {
       Wu = DMatrix::Random(num_users_, num_dim_) * init_scale;
       Wu_ag = DMatrix::Constant(num_users_, num_dim_, 0.0001);
     }
+
     b = DVector::Zero(num_dim_);
     b_ag = DVector::Ones(num_dim_) * 0.0001;
     b_prime = DVector::Zero(num_items_);
@@ -136,6 +143,7 @@ class CDAE : public RecsysModelBase {
     bu = DVector::Zero(num_users_);
     bu_ag = DVector::Ones(num_users_) * 0.0001;
 
+    // user-specific matrix Uu
     if (linear_function_) { 
       Uu = DMatrix::Constant(num_users_, num_dim_, 1.);
       Uu_ag = DMatrix::Constant(num_users_, num_dim_, 0.0001);
@@ -205,7 +213,7 @@ class CDAE : public RecsysModelBase {
     
     // ????
     DVector z_1_z =  DVector::Ones(num_dim_);
-    if (! linear_) {
+    if (! linear_) { 
       if (! tanh_) {
         // sigmoid activation
         z_1_z = z - z.cwiseProduct(z);
@@ -299,8 +307,6 @@ class CDAE : public RecsysModelBase {
 
     for (auto& iid : negative_samples) // items in Su set
     {
-      LOG(INFO) << "negative_samples" << iid;
-      
       // Compute output values yu^ = f(.)
       double y = get_output_values(z, iid); // yu^
 
@@ -354,8 +360,7 @@ class CDAE : public RecsysModelBase {
       }
     }
 
-    // Compute Zu gradient ∂l/∂Zu ?????
-    // ========================== 
+    // user-specific matrix Uu
     DVector Uu_grad;
     if (linear_function_) {
       Uu_grad = DVector::Zero(num_dim_);
@@ -397,16 +402,21 @@ class CDAE : public RecsysModelBase {
 
     // Update Wj
     for (auto& p : input_set) {
+      
       size_t jid = p.first;
+      
       DVector grad = DVector::Zero(num_dim_);
+      
       if (!linear_function_) {
         grad = hidden_gradient.cwiseProduct(z_1_z) * scale + lambda_ * W.row(jid).transpose();
       } else {
         grad = Uu.row(uid).transpose().cwiseProduct(hidden_gradient.cwiseProduct(z_1_z)) * scale + lambda_ * W.row(jid).transpose();
         Uu_grad += hidden_gradient.cwiseProduct(z_1_z).cwiseProduct(W.row(jid).transpose());
       }
+
       if (input_gradient.count(jid))
         grad += input_gradient[jid];
+      
       if (using_adagrad_) {
         W_ag.row(jid) += grad.cwiseProduct(grad);
         grad = grad.cwiseQuotient((W_ag.row(jid).transpose().cwiseSqrt().array() + beta_).matrix());
@@ -434,13 +444,12 @@ class CDAE : public RecsysModelBase {
     // initialize h vector to zero
     DVector h1 = DVector::Zero(num_dim_); 
     
-    // += W^T.Yu~
+    // += W^T.yu~
     for (auto& p : item_set) {
       size_t iid = p.first; 
       h1 += W.row(iid) * scale;
     }
     
-    // linear mapping function h(.)
     if (linear_function_) { 
       h1 = Uu.row(uid).transpose().cwiseProduct(h1);
     }
@@ -455,7 +464,6 @@ class CDAE : public RecsysModelBase {
 
     // nonlinear mapping function h(.)
     if (! linear_) {
-    
       if (! tanh_) {
         // sigmoid activation
         h1 = h1.unaryExpr([](double x) { // apply a unary operator coefficient-wise
@@ -556,22 +564,21 @@ class CDAE : public RecsysModelBase {
   }
 
 
-
  private:
 
   // Model params: W, W', V, b, b'
-  DMatrix W; // W': weights between nodes in the hidden layer and the output layer
-
-  // W: weights vector between the item input nodes and the nodes in the hidden layer
-  DMatrix V; // ==> asymmetric
+  DMatrix W; // W: weights vector between the item input nodes and the nodes in the hidden layer
+  DMatrix V; // W': weights between nodes in the hidden layer and the output layer
+  
+  // --  when asymmetric true => W != W'. Otherwise W = W' (tied weights) --
 
   DMatrix Wu; // Vu: weight vector for the user input node 
   DVector b; // b: weight vector for the bias node in the hidden layer
   DVector b_prime; // b': offset vector for the output layer
   DVector bu; // bu: not used!
-  DMatrix Uu; // Zu: latent representation 
+  DMatrix Uu; // user-specific matrix Uu (K×K transform matrix) on the hidden layer
 
-  // Model params updated using Adagrad: W, W', V,b, b'
+  // Model params updated using Adagrad: W, W', V, b, b'
   DMatrix W_ag, V_ag, Wu_ag, Uu_ag;
   DVector b_ag, b_prime_ag, bu_ag;
  
@@ -582,7 +589,7 @@ class CDAE : public RecsysModelBase {
   size_t num_corruptions_ = 10;
   size_t num_neg_ = 5;
   bool using_adagrad_ = true;
-  bool asymmetric_ = false;
+  bool asymmetric_ = false;  
   bool user_factor_ = true;
   bool linear_ = false;
   bool scaled_ = true;

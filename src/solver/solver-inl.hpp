@@ -10,24 +10,24 @@ namespace libcf {
 template<class Model>
 void Solver<Model>::train(const Data& train_data, 
                               const Data& validation_data,
-                              const  vector<EvalType>& eval_types) {
+                              const vector<EvalType>& eval_types) {
 
 
   double train_loss = 0;
 
-  // Evaluation metrics
-   vector< shared_ptr<Evaluation<Model>>> evaluations(eval_types.size());
+  // Create evaluation metrics array
+  vector< shared_ptr<Evaluation<Model>>> evaluations(eval_types.size());
   for (size_t idx = 0; idx < eval_types.size(); ++idx) {
     evaluations[idx] = Evaluation<Model>::create(eval_types[idx]);
   }
 
-  // Initialize parameters with random values.
+  // Initialize parameters with random values
   model_->reset(train_data);
 
   // iter ← 0
   size_t iteration = 0;
 
-  pre_train(train_data, validation_data); // not implemented!
+  // pre_train(train_data, validation_data); // not implemented!
 
   Timer t;
   
@@ -38,10 +38,12 @@ void Solver<Model>::train(const Data& train_data,
     ss <<  setfill(' ') <<  setw(5) << "Iters" << "|"
         <<  setw(8) << "Time"  << "|" 
         <<  setw(10) << "Train Loss" << "|";
+    
     if(validation_data.size() > 0) {
       for (size_t idx = 0; idx < eval_types.size(); ++idx) 
         ss << evaluations[idx]->evaluation_type() << "|";
     } 
+
     LOG(INFO) << ss.str();
   }
 
@@ -51,10 +53,12 @@ void Solver<Model>::train(const Data& train_data,
     ss <<  setw(5) << iteration << "|"
         <<  setw(8) <<  setprecision(3) << t.elapsed() << "|"
         <<  setw(10) <<  setprecision(5) << train_loss << "|";
+    
     if (validation_data.size() > 0) {
       for (size_t idx = 0; idx < eval_types.size(); ++idx) 
         ss << evaluations[idx]->evaluate(*model_, validation_data, train_data) << "|";
     }
+    
     LOG(INFO) << ss.str();
   }
 
@@ -62,7 +66,6 @@ void Solver<Model>::train(const Data& train_data,
   * Training: learning algorithm
   */
 
-  // while iter < maxIter or error on validation set decreases do
   bool stop = false;
   while(!stop) {
 
@@ -81,13 +84,16 @@ void Solver<Model>::train(const Data& train_data,
       ss <<  setw(5) << iteration << "|"
           <<  setw(8) <<  setprecision(3) << t.elapsed() << "|"
           <<  setw(10) <<  setprecision(5) << train_loss << "|";
+      
       if (validation_data.size() > 0) {
         for (size_t idx = 0; idx < eval_types.size(); ++idx) 
           ss << evaluations[idx]->evaluate(*model_, validation_data, train_data) << "|";
       }
+      
       LOG(INFO) << ss.str();
     }
 
+    // while iter < maxIter or error on validation set decreases (early stopping not implemented!)
     // check conditions
     if (iteration >= max_iteration_) {
       stop = true;
@@ -106,7 +112,7 @@ void Solver<Model>::train(const Data& train_data,
 
 template<class Model>
 void Solver<Model>::test(const Data& test_data,
-                         const  vector<EvalType>& eval_types) {
+                         const vector<EvalType>& eval_types) {
 
   Timer t;
   vector< shared_ptr<Evaluation<Model>>> evaluations(eval_types.size());
@@ -132,6 +138,7 @@ void Solver<Model>::test(const Data& test_data,
     if (test_data.size() > 0) {
       for (size_t idx = 0; idx < eval_types.size(); ++idx) 
         ss << evaluations[idx]->evaluate(*model_, test_data) << "|";
+      cout << "ok";
     }
     LOG(INFO) << ss.str();
   }

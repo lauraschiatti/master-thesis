@@ -101,7 +101,8 @@ class MAE_Evaluation : public Evaluation<Model> {
 
 
  /*
-  * TOPN Evaluation class
+  * TOPN Evaluation class: 
+  * Precision, Recall, MAP for implicit data
   */
 template<class Model>
 class TOPN_Evaluation : public Evaluation<Model> {
@@ -130,6 +131,7 @@ class TOPN_Evaluation : public Evaluation<Model> {
     auto validation_user_itemset = validation_data.get_feature_pair_label_hashtable(0, 1);
 
     std::unordered_map<size_t, std::unordered_map<size_t, double>> train_user_itemset;
+    
     if (train_data.size() != 0) {
       train_user_itemset = train_data.get_feature_pair_label_hashtable(0, 1);
     }
@@ -149,12 +151,16 @@ class TOPN_Evaluation : public Evaluation<Model> {
     dynamic_parallel_for(0, num_users, [&](size_t uid) {
     //for (size_t uid = 0; uid < num_users; ++uid) {
       auto iter = validation_user_itemset.find(uid);
+      
       if (iter == validation_user_itemset.end()) return;
+      
       auto train_it = train_user_itemset.find(iter->first);
       CHECK(train_it != train_user_itemset.end());
       auto& validation_set = iter->second;
-      // Models are required to have this function
-      auto rec_list = model.recommend(iter->first, 10, train_it->second);
+      
+      // Cn,rec: Top-N recommendation list
+      int top_n = 10;
+      auto rec_list = model.recommend(iter->first, top_n, train_it->second);
       
       for (auto& rec_iid : rec_list) {
         CHECK_LT(rec_iid, train_data.feature_group_total_dimension(1));
@@ -163,43 +169,56 @@ class TOPN_Evaluation : public Evaluation<Model> {
         auto& iid = p.first;
         CHECK_LT(iid, train_data.feature_group_total_dimension(1));
       }
+
       auto eval_rets = evaluate_rec_list(rec_list, validation_set);
       //std::transform(rets.begin(), rets.end(), eval_rets.begin(), rets.begin(),
       //               std::plus<double>());
+
       user_rets[uid].assign(eval_rets.begin(), eval_rets.end()); 
     });
     //}
+
+    // all users in the test |U|
     double num_users_for_test = static_cast<double>(validation_user_itemset.size());
-    std::vector<double> rets(8, 0.);
+
+    // vector to store all 8 metrics values: 
+    std::vector<double> rets(8, 0.); // P@1, P@5, P@10, R@1, R@5, R@10, MAP@5, MAP@10
+
+    // mean of the AP scores for all users
     parallel_for(0, 8, [&](size_t colid) {
-              for (size_t uid = 0; uid < num_users; ++uid) {
-                rets[colid] += user_rets[uid][colid] / num_users_for_test;
-              }
+      for (size_t uid = 0; uid < num_users; ++uid) {
+        rets[colid] += user_rets[uid][colid] / num_users_for_test;
+      }
     });
 
     std::stringstream ss;
-    ss << std::setw(8) << std::setprecision(5) << rets[0] << "|"
-        << std::setw(8) << std::setprecision(5) << rets[1]  << "|"
-        << std::setw(8) << std::setprecision(5) << rets[2] << "|"
-        << std::setw(8) << std::setprecision(5) << rets[3] << "|"
-        << std::setw(8) << std::setprecision(5) << rets[4] << "|"
-        << std::setw(8) << std::setprecision(5) << rets[5] << "|"
-        << std::setw(8) << std::setprecision(5) << rets[6] << "|"
-        << std::setw(8) << std::setprecision(5) << rets[7] << "|"
+    ss << std::setw(8) << std::setprecision(5) << rets[0] << "|" // P@1
+        << std::setw(8) << std::setprecision(5) << rets[1]  << "|" // P@5
+        << std::setw(8) << std::setprecision(5) << rets[2] << "|" // P@10
+        << std::setw(8) << std::setprecision(5) << rets[3] << "|" // R@1
+        << std::setw(8) << std::setprecision(5) << rets[4] << "|" // R@5
+        << std::setw(8) << std::setprecision(5) << rets[5] << "|" // R@10
+        << std::setw(8) << std::setprecision(5) << rets[6] << "|" // MAP@5
+        << std::setw(8) << std::setprecision(5) << rets[7] << "|" // MAP@10
         << std::setw(8) << std::setprecision(3) << t.elapsed();
         //<< std::setw(8) << std::setprecision(5) << rets[8] << "|"
         //<< std::setw(8) << std::setprecision(5) << rets[9]; 
+
     return ss.str(); 
   } 
 
-  std::vector<double> evaluate_rec_list(const std::vector<size_t>& list,
-                                        const std::unordered_map<size_t, double>& map) const {
+  std::vector<double> evaluate_rec_list(const std::vector<size_t>& list, // rec_list
+                                        const std::unordered_map<size_t, 
+                                        double>& map) const {  // validation_set
     std::vector<double> rets(8, 0.);
-    size_t TOPK = 20;
-    double hit = 0.;
+    size_t TOPK = 20; 
+    double hit = 0.; // true positives
     double map5 = 0;
     double map10 = 0;
-    TOPK = std::min(TOPK, list.size());
+    
+    // top-n items
+    TOPK = std::min(TOPK, list.size()); // list.size() = 10 (typically)
+
     for (size_t idx = 0; idx < TOPK; ++idx) {
       if (map.find(list[idx]) != map.end()) {
         hit += 1.;
@@ -210,32 +229,33 @@ class TOPN_Evaluation : public Evaluation<Model> {
           map10 += hit / (idx + 1);
         }
       }
+
       if (idx == 0) {
-        rets[0] = hit / 1.;
-        rets[3] = hit / map.size();
+        rets[0] = hit / 1.; // P@1 
+        rets[3] = hit / map.size(); // R@1
       } else if (idx == 4) {
-        rets[1] = hit / 5.; 
-        rets[4] = hit / map.size(); 
+        rets[1] = hit / 5.; // P@5
+        rets[4] = hit / map.size(); // R@5
       } else if (idx == 9) {
-        rets[2] = hit / 10.;
-        rets[5] = hit / map.size();
+        rets[2] = hit / 10.; // P@10
+        rets[5] = hit / map.size(); // R@10
       }// else if (idx == 19) {
        // rets[3] = hit / 20.;
        // rets[7] = hit / map.size();
      // }
     }
-    rets[6] = map5 / static_cast<double>(std::min(size_t(5), map.size()));
-    rets[7] = map10 / static_cast<double>(std::min(size_t(10), map.size()));
+    rets[6] = map5 / static_cast<double>(std::min(size_t(5), map.size())); // MAP@5
+    rets[7] = map10 / static_cast<double>(std::min(size_t(10), map.size())); // MAP@10
+    
     return std::move(rets);
-
   }
 };
 
 
  /*
   * Ranking Evaluation class
+  * NDCG, AP for explicit data
   */
-
 template<class Model>
 class RANKING_Evaluation : public Evaluation<Model> {
 
@@ -284,6 +304,7 @@ class RANKING_Evaluation : public Evaluation<Model> {
       auto train_it = train_user_itemset.find(iter->first);
       CHECK(train_it != train_user_itemset.end());
       auto& validation_set = iter->second;
+      
       // Models are required to have this function
       auto rec_list = model.recommend(iter->first, 10, train_it->second);
       
@@ -300,6 +321,7 @@ class RANKING_Evaluation : public Evaluation<Model> {
       user_rets[uid].assign(eval_rets.begin(), eval_rets.end()); 
     });
     //}
+    
     double num_users_for_test = static_cast<double>(validation_user_itemset.size());
     std::vector<double> rets(8, 0.);
     parallel_for(0, 8, [&](size_t colid) {
@@ -383,14 +405,19 @@ template<class Model>
 std::shared_ptr<Evaluation<Model>> Evaluation<Model>::create(const EvalType& rt) {
   switch (rt) {
     case RMSE:
+      std::cout << "RMSE";
       return std::shared_ptr<Evaluation<Model>>(new RMSE_Evaluation<Model>());
     case MAE:
+      std::cout << "MAE";
       return std::shared_ptr<Evaluation<Model>>(new MAE_Evaluation<Model>());
     case TOPN:
+      std::cout << "TOPN";
       return std::shared_ptr<Evaluation<Model>>(new TOPN_Evaluation<Model>());
     case RANKING:
+      std::cout << "RANKING";
       return std::shared_ptr<Evaluation<Model>>(new RANKING_Evaluation<Model>());
     default:
+      std::cout << "RMSE";
       return std::shared_ptr<Evaluation<Model>>(new RMSE_Evaluation<Model>());
   }
 }
