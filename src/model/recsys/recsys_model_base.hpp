@@ -26,7 +26,7 @@ class RecsysModelBase : public ModelBase {
   }
   
   /**
-   * Keep only ratings >= 4 and treat the other ratings as missing entries
+   * Keep only ratings > 3 and treat the other ratings as missing entries
    * retained ratings are converted to 1
   */
   virtual double rating_converter(double x) const {

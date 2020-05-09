@@ -126,11 +126,13 @@ class CDAE : public RecsysModelBase {
     W = DMatrix::Random(num_items_, num_dim_) * init_scale;
     W_ag = DMatrix::Constant(num_items_, num_dim_, 0.0001);
     
+    // TW or NTW
     if (asymmetric_) {
       V = DMatrix::Random(num_items_, num_dim_) * init_scale;
       V_ag = DMatrix::Constant(num_items_, num_dim_, 0.0001);
     } 
 
+    // DAE or CDAE
     if (user_factor_) {
       Wu = DMatrix::Random(num_users_, num_dim_) * init_scale;
       Wu_ag = DMatrix::Constant(num_users_, num_dim_, 0.0001);
@@ -462,7 +464,6 @@ class CDAE : public RecsysModelBase {
     // +=b
     h1 += b; 
 
-    // nonlinear mapping function h(.)
     if (! linear_) {
       if (! tanh_) {
         // sigmoid activation
@@ -497,15 +498,17 @@ class CDAE : public RecsysModelBase {
   /**
    * Latent representation is mapped back to the orignal input space
    * Compute output yu^ = f(Wi'^T.Zu + bi')
-   * f(.) is an identity function
+   * f(.) is identity function or sigmoid function
   */ 
   double get_output_values(const DVector& z, size_t idx) const {
     double h2 = 0; 
+
     if (asymmetric_) {
       h2 += V.row(idx).dot(z) + b_prime(idx); // Vi'^T.Zu + bi'
     } else {
       h2 += W.row(idx).dot(z) + b_prime(idx); // Wi^T.Zu + bi'
     }
+    
     return h2;
   }
 

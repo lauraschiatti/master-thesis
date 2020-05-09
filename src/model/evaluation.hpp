@@ -141,24 +141,25 @@ class TOPN_Evaluation : public Evaluation<Model> {
     
     Timer t;
 
+    // initialize metrics vector for all users
     std::vector<std::vector<double>> user_rets(num_users);
     parallel_for(0, num_users, [&](size_t uid) {
-                  user_rets[uid] = std::vector<double>(8, 0.);
-                });
+      user_rets[uid] = std::vector<double>(8, 0.);
+    });
     
     model.pre_recommend();
 
+    // compute metrics for each user
     dynamic_parallel_for(0, num_users, [&](size_t uid) {
     //for (size_t uid = 0; uid < num_users; ++uid) {
       auto iter = validation_user_itemset.find(uid);
-      
       if (iter == validation_user_itemset.end()) return;
       
       auto train_it = train_user_itemset.find(iter->first);
       CHECK(train_it != train_user_itemset.end());
       auto& validation_set = iter->second;
       
-      // Cn,rec: Top-N recommendation list
+      // top-n recommendation list for current user
       int top_n = 10;
       auto rec_list = model.recommend(iter->first, top_n, train_it->second);
       
@@ -170,10 +171,12 @@ class TOPN_Evaluation : public Evaluation<Model> {
         CHECK_LT(iid, train_data.feature_group_total_dimension(1));
       }
 
+      // evaluate remmendation list for current user
       auto eval_rets = evaluate_rec_list(rec_list, validation_set);
       //std::transform(rets.begin(), rets.end(), eval_rets.begin(), rets.begin(),
       //               std::plus<double>());
 
+      // update metrics vector for the current user
       user_rets[uid].assign(eval_rets.begin(), eval_rets.end()); 
     });
     //}
