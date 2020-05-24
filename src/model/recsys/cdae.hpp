@@ -28,6 +28,7 @@ struct CDAEConfig {
   double beta = 0.;
   bool linear_function = false;
   bool tanh = false;  
+  bool sigmoid_output = false; 
 };
 
 /* 
@@ -52,7 +53,8 @@ class CDAE : public RecsysModelBase {
     scaled_ = mcfg.scaled;
     beta_ = mcfg.beta;
     linear_function_ = mcfg.linear_function; 
-    tanh_ = mcfg.tanh; // sigmoid (tanh = false), tanh (tanh = true)
+    tanh_ = mcfg.tanh; 
+    sigmoid_output_ = mcfg.sigmoid_output, 
 
     LOG(INFO) << "CDAE Configure: \n" 
         << "\t{lambda: " << lambda_ << "}, "
@@ -70,7 +72,8 @@ class CDAE : public RecsysModelBase {
         << "{Scaled: " << scaled_ << "}\n"
         << "\t{Beta: " << beta_ << "}, "
         << "{LinearFunction: " << linear_function_ << "}, "
-        << "{tanh: " << tanh_ << "}"; 
+        << "{tanh: " << tanh_ << "} "
+        << "{Sigmoid in output: " << sigmoid_output_ << "}"; 
   }
 
   CDAE() : CDAE(CDAEConfig()) {}
@@ -477,6 +480,7 @@ class CDAE : public RecsysModelBase {
                         return 1. / (1. +  exp(-x));  // 1 / (1 + exp(-x))
                         });
       } 
+
       else {
         // tanh activation
         h1 = h1.unaryExpr([](double x) {
@@ -508,7 +512,18 @@ class CDAE : public RecsysModelBase {
     } else {
       h2 += W.row(idx).dot(z) + b_prime(idx); // Wi^T.Zu + bi'
     }
-    
+
+    if(sigmoid_output_){
+      double x = h2;
+      if (x > 18.) {
+        h2 = 1.;
+      } 
+      if (x < -18.) {
+        h2 = 0.;
+      }
+      h2 =  1. / (1. +  exp(-x));  // 1 / (1 + exp(-x))
+    }
+
     return h2;
   }
 
@@ -599,6 +614,7 @@ class CDAE : public RecsysModelBase {
   double beta_ = 0.; 
   bool linear_function_ = false;
   bool tanh_ = false; 
+  bool sigmoid_output_ = false;
 };
 
 } // namespace

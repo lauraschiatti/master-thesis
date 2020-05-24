@@ -19,9 +19,18 @@
 */ 
 std::string dataset_dir = "data/";
 std::string dataset_bin_dir = "data/bin/";
-std::string dataset = "movielens";
 
-DEFINE_string(input_file, dataset_dir + "sample_" + dataset + "_data.txt", "input data"); 
+std::string dataset = "netflix_prize";
+const char * log_file = "log/netflix_prize_implicit.log";
+
+// use sample dataset
+// std::string dataset_filepath = dataset_dir + dataset + "_dataset/" + "s_" + dataset + "_data.txt";
+std::string dataset_filepath = dataset_dir + dataset + "_dataset/ratings.csv";
+
+// use whole dataset
+// std::string dataset_filepath = dataset_dir + dataset + "_dataset/" + dataset + "_data.txt";
+
+DEFINE_string(input_file, dataset_filepath, "input data"); 
  
 // dataset binaries 
 DEFINE_string(cache_file, dataset_bin_dir + dataset + ".bin", "cache file"); 
@@ -34,7 +43,7 @@ DEFINE_string(test_cache_file, dataset_bin_dir + dataset + ".test.bin", "cached 
 DEFINE_string(task, "train", "Task type");  
 DEFINE_int32(seed, 20141119, "Random Seed");  // default 
 DEFINE_string(method, "CDAE", "Which Method to use"); // "NONE"
-DEFINE_string(model_variant, "M3", "Which Model to train"); // "M1", "M2", "M3", "M4"
+DEFINE_string(model_variant, "M1", "Which Model to train"); // "M1", "M2", "M3", "M4"
 
 /**
  * Model parameters
@@ -44,7 +53,7 @@ DEFINE_int32(num_neg, 5, "Num of negative samples");  // NS
 
 // corruption level
 DEFINE_int32(cnum, 1, "Num of Corruptions"); // default
-DEFINE_double(cratio, 1, "Corruption Ratio");
+DEFINE_double(cratio, 0, "Corruption Ratio");
 
 // scaled input
 DEFINE_bool(scaled, false, "scaled input"); // default
@@ -59,7 +68,7 @@ DEFINE_double(beta, 1., "Beta for adagrad"); // β
 DEFINE_double(holdout_perc, 0.2, "Holdout percentage"); 
 
 // user factor: include user input node (CDAE) or not (DAE)
-DEFINE_bool(user_factor, false, "using user factor"); // false=DAE, true=CDAE
+DEFINE_bool(user_factor, true, "using user factor"); // false=DAE, true=CDAE
 
 // asymmetric DAE: tied weights (TW) or non-tied weights (NTW)
 DEFINE_bool(asym, true, "Asymmetric DAE"); // false=TW, true=NTW 
@@ -76,7 +85,7 @@ int main(int argc, char* argv[]) {
   */
   FLAGS_log_dir = "./log"; // set directory to save log files
   // FLAGS_logtostderr = 1; // log messages to the console instead of logfiles.
-  google::SetLogDestination(google::GLOG_INFO, "log/movielens_implicit.log");
+  google::SetLogDestination(google::GLOG_INFO, log_file);
   google::InitGoogleLogging(argv[0]); // Initialize Google's logging library.
 
   // gflags::SetUsageMessage("movielens");
@@ -91,29 +100,48 @@ int main(int argc, char* argv[]) {
 
   int line_size;
   std::string split;
+  bool skip_header;
 
   if (dataset == "movielens") {
     // data format: UserID::MovieID::Rating::Timestamp
     line_size = 4; 
     split = ": ";
+    skip_header = false;
+
+  } else if(dataset == "yelp"){
+    // data format: user_id,business_id,stars,date
+    line_size = 4; 
+    split = ", ";
+    skip_header = true;
+  
+  } else if(dataset == "netflix_prize"){
+    // data format: userId,movieId,rating,timestamp
+    line_size = 4; 
+    split = ", ";
+    skip_header = true;
   }
+
 
   // get data binary
   std::ifstream data_file;
   data_file.open(FLAGS_cache_file);
   
   if (!data_file){ // data binary file does not exist 
-    std::cout<<"TASK: prepare ... \n";
+    std::cout<<"TASK: prepare \n";
 
     auto line_parser = [&](const std::string& line) {
-      // auto rets = split_line(line, " "); // yelp
-      auto rets = split_line(line, split);
+      auto rets = split_line(line, split); // rets[2KNPtV5E44vAiEr5BvMkUA,eJpr6Ks8pr4bmvDVPTN-Xg,2,2012-06-11]
+
+      // LOG(ERROR) << "rets" << rets;
+      // LOG(ERROR) << "rets" << rets.size();
+      // LOG(ERROR) << "line_size" << line_size;
+
       CHECK_EQ(rets.size(), line_size); 
       return std::vector<std::string>{rets[0], rets[1], "1"};
     };
 
     Data data;
-    data.load(FLAGS_input_file, RECSYS, line_parser, false); // skip_header=true
+    data.load(FLAGS_input_file, RECSYS, line_parser, skip_header); 
     save(data, FLAGS_cache_file);  
   }
 
@@ -122,7 +150,7 @@ int main(int argc, char* argv[]) {
   train_file.open(FLAGS_train_cache_file);
    
   if (!train_file){ // train binary file does not exist
-    std::cout<<"TASK: split ...\n";
+    std::cout<<"TASK: split \n";
 
     Random::seed(FLAGS_seed); // use the same seed to split the data 
 
@@ -143,11 +171,11 @@ int main(int argc, char* argv[]) {
    * Loading data  
   */
 
-  std::cout << "TASK: loading data ... \n";
+  std::cout << "TASK: loading data \n";
   Data train, test;
 
   if (FLAGS_task == "train") {
-    std::cout << "TASK: train\n";
+    std::cout << "TASK: train \n";
 
     Random::seed(FLAGS_seed); // use the same seed to split the data 
     
@@ -159,7 +187,7 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << test;
 
   } if (FLAGS_task == "test") {
-    std::cout << "TASK: test ...\n";
+    std::cout << "TASK: test \n";
     load(FLAGS_train_cache_file, train);
     load(FLAGS_test_cache_file, test);
   
@@ -179,18 +207,34 @@ int main(int argc, char* argv[]) {
     bool linear; // true=identity, false=check tanh/sigmoid
     bool tanh; // true=tanh, false=sigmoid
     bool linear_function; // true=linear_mapping
+
+    // f(.) activation function on the output layer
+    // identity, sigmoid 
+    bool sigmoid_output; // true=sigmoid , false=identity
     string loss_type; // loss function type l(.)
   } ; 
 
   model_setup model;
 
   if (FLAGS_model_variant == "M1"){
+    std::cout << "MODEL: M1 \n";
     // Model M1: h(.) = identity, f(.) = identity, l(.) = SQUARE
-    model = {.linear = true, .tanh = false, .linear_function = false, .loss_type = "SQUARE"};
+    model = {.linear = true, .tanh = false, .linear_function = false, .sigmoid_output = false, .loss_type = "SQUARE"};
 
+  } else if(FLAGS_model_variant == "M2"){
+    std::cout << "MODEL: M2 \n";
+    // Model M2: h(.) = identity, f(.) = sigmoid, l(.) = LOGISTIC
+    model = {.linear = true, .tanh = false, .linear_function = false, .sigmoid_output = true, .loss_type = "LOGISTIC"};
+  
   } else if(FLAGS_model_variant == "M3"){
+    std::cout << "MODEL: M3";
     // Model M3: h(.) = sigmoid, f(.) = identity, l(.) = SQUARE
-    model = {.linear = false, .tanh = false, .linear_function = false, .loss_type = "SQUARE"};
+    model = {.linear = false, .tanh = false, .linear_function = false, .sigmoid_output = false, .loss_type = "SQUARE"};
+  
+  } else if(FLAGS_model_variant == "M4"){
+    std::cout << "MODEL: M4";
+    // Model M4: h(.) = sigmoid, f(.) = sigmoid, l(.) = LOGISTIC
+    model = {.linear = false, .tanh = false, .linear_function = false, .sigmoid_output = TRUE, .loss_type = "LOGISTIC"};
   }
 
   Random::timed_seed();
@@ -212,6 +256,7 @@ int main(int argc, char* argv[]) {
     config.beta = FLAGS_beta; 
     config.linear_function = model.linear_function;
     config.tanh = model.tanh;
+    config.sigmoid_output = model.sigmoid_output;
     
     if (model.loss_type == "SQUARE") {
       config.lt = SQUARE;

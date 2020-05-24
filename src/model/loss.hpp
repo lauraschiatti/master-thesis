@@ -93,7 +93,7 @@ class LogisticLoss : public Loss {
   }
 
   double gradient(double pred, double truth) const {
-    CHECK(pred > 0. && pred < 1.);
+    CHECK(pred > 0. && pred < 1.); // crashes because the value turns into 1 ==> y 1 pred 1
     CHECK(truth == 1. || truth == 0.);
     return (pred - truth) / (pred * (1. - pred));
   }
