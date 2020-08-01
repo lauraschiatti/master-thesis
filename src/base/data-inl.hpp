@@ -18,6 +18,7 @@ void Data::load(const std::string& filename,
     data_info_ = std::make_shared<DataInfo>(new DataInfo());
   }
 
+  // give format to Data set summary (on logs file)
   switch (df) {
     case VECTOR : {
       FileLineReader f(filename);
@@ -236,31 +237,45 @@ void Data::random_split_by_feature_group(Data& train, Data& test,
   size_t est_num_test = static_cast<size_t>(test_ratio * size());
   size_t est_num_train = size() - est_num_test;
 
+  // allocate vector for train and test instances
   std::vector<Instance> train_ins_vec;
   train_ins_vec.reserve(est_num_train + size() * 0.01);
   std::vector<Instance> test_ins_vec;
   test_ins_vec.reserve(est_num_test + size() * 0.01);
 
+  // get_feature_ins_idx_hashtable for users (feature 0)
   auto fg_idx_ins_idx_hashtable = get_feature_ins_idx_hashtable(feature_group_idx);
 
   size_t cnt = 0;
   size_t num_test;
 
+  std::cout<<"random_split_by_feature_group\n";
+
   for (auto iter = fg_idx_ins_idx_hashtable.begin(); iter != fg_idx_ins_idx_hashtable.end(); ++iter) {
-    auto& tmp_vec = iter->second;
+    auto& tmp_vec = iter->second; // iter->second is the value. The key is iter->first. 
+    
+    std::cout<<"tmp_vec"<<tmp_vec<<std::endl;
+    
     Random::shuffle(std::begin(tmp_vec), std::end(tmp_vec));
+
+    // get up to test_ratio interactions by user for test data (test_ins_vec)
     num_test = static_cast<size_t>(tmp_vec.size() * test_ratio);
+    std::cout<<"num_test: "<<num_test<<std::endl;
+    
+    std::cout<<"tmp_vec.size()"<<tmp_vec.size()<<std::endl;
     for(size_t idx = 0; idx < tmp_vec.size(); ++idx) {
+      std::cout<<"idx: "<<idx<<std::endl;
       if (idx < num_test) {
-        test_ins_vec.push_back(instances_[tmp_vec[idx]]);
+        test_ins_vec.push_back(instances_[tmp_vec[idx]]);  // adds a new element at the end of the vector, 
       } else {
         train_ins_vec.push_back(instances_[tmp_vec[idx]]);
       }
     }
     ++cnt;
   }
+  
   CHECK_EQ(cnt, feature_group_total_dimension(feature_group_idx));
-  CHECK_EQ(test_ins_vec.size() + train_ins_vec.size(), size());
+  CHECK_EQ(test_ins_vec.size() + train_ins_vec.size(), size()); // check s
 
   Random::shuffle(std::begin(train_ins_vec), std::end(train_ins_vec));
   Random::shuffle(std::begin(test_ins_vec), std::end(test_ins_vec));
@@ -271,47 +286,56 @@ void Data::random_split_by_feature_group(Data& train, Data& test,
   LOG(INFO) << "Finished splitting data set in " << timer;
 }
 
-void Data::inplace_random_split_by_feature_group(Data& train, Data& test,
-                                         size_t feature_group_idx, double test_ratio)  {
+// void Data::inplace_random_split_by_feature_group(Data& train, Data& test,
+//                                          size_t feature_group_idx, double test_ratio)  {
 
-  Timer timer;
+//   Timer timer;
 
-  size_t est_num_test = static_cast<size_t>(test_ratio * size());
-  size_t est_num_train = size() - est_num_test;
+//   size_t est_num_test = static_cast<size_t>(test_ratio * size());
+//   size_t est_num_train = size() - est_num_test;
 
-  std::vector<Instance> train_ins_vec;
-  train_ins_vec.reserve(est_num_train + size() * 0.01);
-  std::vector<Instance> test_ins_vec;
-  test_ins_vec.reserve(est_num_test + size() * 0.01);
+//   std::vector<Instance> train_ins_vec;
+//   train_ins_vec.reserve(est_num_train + size() * 0.01);
+//   std::vector<Instance> test_ins_vec;
+//   test_ins_vec.reserve(est_num_test + size() * 0.01);
 
-  auto fg_idx_ins_idx_hashtable = get_feature_ins_idx_hashtable(feature_group_idx);
-  size_t cnt = 0;
-  size_t num_test;
+//   auto fg_idx_ins_idx_hashtable = get_feature_ins_idx_hashtable(feature_group_idx);
+//   size_t cnt = 0;
+//   size_t num_test;
 
-  for (auto iter = fg_idx_ins_idx_hashtable.begin(); iter != fg_idx_ins_idx_hashtable.end(); ++iter) {
-    auto& tmp_vec = iter->second;
-    Random::shuffle(std::begin(tmp_vec), std::end(tmp_vec));
-    num_test = static_cast<size_t>(tmp_vec.size() * test_ratio);
-    for(size_t idx = 0; idx < tmp_vec.size(); ++idx) {
-      if (idx < num_test) {
-        test_ins_vec.push_back(std::move(instances_[tmp_vec[idx]]));
-      } else {
-        train_ins_vec.push_back(std::move(instances_[tmp_vec[idx]]));
-      }
-    }
-    ++cnt;
-  }
-  CHECK_EQ(cnt, feature_group_total_dimension(feature_group_idx));
-  CHECK_EQ(test_ins_vec.size() + train_ins_vec.size(), size());
+//   for (auto iter = fg_idx_ins_idx_hashtable.begin(); iter != fg_idx_ins_idx_hashtable.end(); ++iter) {
+//     auto& tmp_vec = iter->second; // iter->second is the value. The key is iter->first 
+    
+//     std::cout<<"inplace_random_split_by_feature_group\n";
+//     std::cout<<tmp_vec<<std::endl;
+    
+//     Random::shuffle(std::begin(tmp_vec), std::end(tmp_vec));
+    
+//     // for each user, idx, select iterations up to test_ratio
+//     num_test = static_cast<size_t>(tmp_vec.size() * test_ratio);
+//     for(size_t idx = 0; idx < tmp_vec.size(); ++idx) {
+//       if (idx < num_test) {
+//         test_ins_vec.push_back(std::move(instances_[tmp_vec[idx]])); 
+//       } else {
+//         train_ins_vec.push_back(std::move(instances_[tmp_vec[idx]]));
+//       }
+//     }
+//     ++cnt;
+    
+//     std::cout << "cnt:" << cnt;
 
-  Random::shuffle(std::begin(train_ins_vec), std::end(train_ins_vec));
-  Random::shuffle(std::begin(test_ins_vec), std::end(test_ins_vec));
+//   }
+//   CHECK_EQ(cnt, feature_group_total_dimension(feature_group_idx));
+//   CHECK_EQ(test_ins_vec.size() + train_ins_vec.size(), size());
 
-  train = Data(std::move(train_ins_vec), data_info_);
-  test = Data(std::move(test_ins_vec), data_info_);
+//   Random::shuffle(std::begin(train_ins_vec), std::end(train_ins_vec));
+//   Random::shuffle(std::begin(test_ins_vec), std::end(test_ins_vec));
 
-  LOG(INFO) << "Finished splitting data set in " << timer;
-}
+//   train = Data(std::move(train_ins_vec), data_info_);
+//   test = Data(std::move(test_ins_vec), data_info_);
+
+//   LOG(INFO) << "Finished splitting data set in " << timer;
+// }
 
 
 
@@ -323,7 +347,10 @@ Data::get_feature_ins_idx_hashtable(size_t feature_group_idx) const {
   fg_idx_ins_id_pair_vec.reserve(size());
   size_t idx = 0;
   size_t ft_idx;
+
   for(auto iter = begin(); iter != end(); ++iter) {
+    // std::cout << typeid(iter).name() << std::endl; // PKN5libcf8InstanceE
+
     CHECK_EQ(iter->feature_group_size(feature_group_idx), 1);
     ft_idx = iter->get_feature_group_index(feature_group_idx, 0) 
         + feature_group_start_idx(feature_group_idx);
@@ -333,7 +360,7 @@ Data::get_feature_ins_idx_hashtable(size_t feature_group_idx) const {
     } else {
       CHECK_LT(ft_idx, total_dimensions());
     }
-    fg_idx_ins_id_pair_vec.emplace_back(ft_idx, idx++); 
+    fg_idx_ins_id_pair_vec.emplace_back(ft_idx, idx++); // appends a new element to the end of the container.
   }
   CHECK_EQ(idx, size());
   CHECK_EQ(fg_idx_ins_id_pair_vec.size(), size()); 

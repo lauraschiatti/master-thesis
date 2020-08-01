@@ -20,22 +20,34 @@
 std::string dataset_dir = "data/";
 std::string dataset_bin_dir = "data/bin/";
 
-std::string dataset = "netflix_prize";
-const char * log_file = "log/netflix_prize_implicit.log";
+std::string dataset = "movielens_100k";
+const char * log_file = "log/movielens_100k_implicit.log";
+std::string dataset_filepath = dataset_dir + dataset + "_dataset/u.data";
+
+// std::string dataset = "movielens_10m"; // movielens_1m
+// const char * log_file = "log/movielens_10m_implicit.log";
+// std::string dataset_filepath = dataset_dir + dataset + "_dataset/ratings.dat";
+
+// std::string dataset = "politic_old"; // politic_old
+// const char * log_file = "log/politic_old_implicit.log";
+// std::string dataset_filepath = dataset_dir + dataset + "_dataset/politic_old.txt";
 
 // use sample dataset
 // std::string dataset_filepath = dataset_dir + dataset + "_dataset/" + "s_" + dataset + "_data.txt";
-std::string dataset_filepath = dataset_dir + dataset + "_dataset/ratings.csv";
-
+// std::string dataset_filepath = dataset_dir + dataset + "_dataset/ratings.csv";
 // use whole dataset
 // std::string dataset_filepath = dataset_dir + dataset + "_dataset/" + dataset + "_data.txt";
 
 DEFINE_string(input_file, dataset_filepath, "input data"); 
  
 // dataset binaries 
-DEFINE_string(cache_file, dataset_bin_dir + dataset + ".bin", "cache file"); 
-DEFINE_string(train_cache_file, dataset_bin_dir + dataset + ".train.bin", "cached train file"); 
-DEFINE_string(test_cache_file, dataset_bin_dir + dataset + ".test.bin", "cached test file"); 
+// DEFINE_string(cache_file, dataset_bin_dir + dataset + ".bin", "cache file"); 
+// DEFINE_string(train_cache_file, dataset_bin_dir + dataset + ".train.bin", "cached train file"); 
+// DEFINE_string(test_cache_file, dataset_bin_dir + dataset + ".test.bin", "cached test file"); 
+
+DEFINE_string(cache_file, dataset_bin_dir + dataset + ".txt", "cache file"); 
+DEFINE_string(train_cache_file, dataset_bin_dir + dataset + ".train.txt", "cached train file"); 
+DEFINE_string(test_cache_file, dataset_bin_dir + dataset + ".test.txt", "cached test file"); 
 
 // ============================================================================================= //
 // ============================================================================================= //
@@ -53,7 +65,7 @@ DEFINE_int32(num_neg, 5, "Num of negative samples");  // NS
 
 // corruption level
 DEFINE_int32(cnum, 1, "Num of Corruptions"); // default
-DEFINE_double(cratio, 0, "Corruption Ratio");
+DEFINE_double(cratio, 0.0, "Corruption Ratio");
 
 // scaled input
 DEFINE_bool(scaled, false, "scaled input"); // default
@@ -102,11 +114,23 @@ int main(int argc, char* argv[]) {
   std::string split;
   bool skip_header;
 
-  if (dataset == "movielens") {
+  if (dataset == "movielens_10m" || dataset == "movielens_1m") {
     // data format: UserID::MovieID::Rating::Timestamp
     line_size = 4; 
     split = ": ";
     skip_header = false;
+
+  } else if (dataset == "movielens_100k") {
+    // data format: UserID\tMovieID\tRating\tTimestamp
+    line_size = 4; 
+    split = "\t ";
+    skip_header = false;
+  
+  } else if (dataset == "politic_old" || dataset == "politic_new"){   
+    // data format: legislatorID\tbillID\tcount
+    line_size = 3; 
+    split = "\t ";
+    skip_header = false; 
 
   } else if(dataset == "yelp"){
     // data format: user_id,business_id,stars,date
@@ -122,7 +146,7 @@ int main(int argc, char* argv[]) {
   }
 
 
-  // get data binary
+  // create data binary
   std::ifstream data_file;
   data_file.open(FLAGS_cache_file);
   
@@ -131,18 +155,19 @@ int main(int argc, char* argv[]) {
 
     auto line_parser = [&](const std::string& line) {
       auto rets = split_line(line, split); // rets[2KNPtV5E44vAiEr5BvMkUA,eJpr6Ks8pr4bmvDVPTN-Xg,2,2012-06-11]
-
       // LOG(ERROR) << "rets" << rets;
       // LOG(ERROR) << "rets" << rets.size();
       // LOG(ERROR) << "line_size" << line_size;
-
       CHECK_EQ(rets.size(), line_size); 
       return std::vector<std::string>{rets[0], rets[1], "1"};
     };
 
     Data data;
+    // give format to "Data set summary" (on logs file)
     data.load(FLAGS_input_file, RECSYS, line_parser, skip_header); 
-    save(data, FLAGS_cache_file);  
+
+    // generate dataset(.bin) file
+    save(data, FLAGS_cache_file, false); // binary_format = false
   }
 
   // split data
@@ -155,14 +180,14 @@ int main(int argc, char* argv[]) {
     Random::seed(FLAGS_seed); // use the same seed to split the data 
 
     Data data;
-    load(FLAGS_cache_file, data);
+    load(FLAGS_cache_file, data, false);
     LOG(INFO) << data; 
     
     Data train, test;
     data.random_split_by_feature_group(train, test, 0, FLAGS_holdout_perc);
     LOG(INFO) << train;
     LOG(INFO) << test;
-    
+
     save(train, FLAGS_train_cache_file);
     save(test, FLAGS_test_cache_file);
   }  
@@ -234,7 +259,7 @@ int main(int argc, char* argv[]) {
   } else if(FLAGS_model_variant == "M4"){
     std::cout << "MODEL: M4";
     // Model M4: h(.) = sigmoid, f(.) = sigmoid, l(.) = LOGISTIC
-    model = {.linear = false, .tanh = false, .linear_function = false, .sigmoid_output = TRUE, .loss_type = "LOGISTIC"};
+    model = {.linear = false, .tanh = false, .linear_function = false, .sigmoid_output = true, .loss_type = "LOGISTIC"};
   }
 
   Random::timed_seed();

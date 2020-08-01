@@ -6,6 +6,8 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 
+#include <iostream>
+
 namespace libcf {
 
 class File {
@@ -124,20 +126,21 @@ bool File::write_iterator(const Iterator& first,
   return ok();
 }
 
-
+///
 template<class Archive, class T>
 void File::serialize_save(const T& t) {
   boost::iostreams::filtering_stream<boost::iostreams::output> out;
-  out.push(boost::iostreams::gzip_compressor());
+  // out.push(boost::iostreams::gzip_compressor());
   out.push(*f_);
+  
   Archive ar(out);
-  ar << t;
+  ar << t; // write class instance to archive
 }
 
 template<class Archive, class T>
 void File::serialize_load(T& t) {
   boost::iostreams::filtering_stream<boost::iostreams::input> input;
-  input.push(boost::iostreams::gzip_decompressor());
+  // input.push(boost::iostreams::gzip_decompressor());
   input.push(*f_);
   Archive ar(input);
   ar >> t;

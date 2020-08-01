@@ -2,7 +2,7 @@ BOOST_DIR = /usr/local
 
 SRC_DIR = ../../src
 
-CXX = g++
+CXX = g++ # compiler to use
 CFLAGS = -O3 -g -std=c++11 #-shared -fPIC
 LDFLAGS= -lpthread -lboost_serialization-mt -lboost_iostreams-mt -lglog -lgflags 
 INCLUDE = -I$(SRC_DIR) -I$(BOOST_DIR)/include 
