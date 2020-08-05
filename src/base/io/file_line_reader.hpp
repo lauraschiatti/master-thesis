@@ -6,7 +6,7 @@
 
 namespace libcf {
 
-typedef std::function<void (const std::string&, size_t)> line_callback_t;
+typedef std::function<void (const std::string&, size_t)> line_callback_t; // the param is a function
 
 class FileLineReader {
 

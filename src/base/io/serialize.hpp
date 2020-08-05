@@ -25,10 +25,7 @@ template<typename T>
       if (binary_format) {  
         f.serialize_save<boost::archive::binary_oarchive, T>(t);
       } else {
-        std::cout <<"save NON-BINARY \n";
-        std::cout << openmode << "\n";
         f.serialize_save<boost::archive::text_oarchive, T>(t);
-        
       }
       f.close();
       LOG(INFO) << "Save data to " << filename << " in " << timer;
@@ -44,8 +41,6 @@ template<typename T>
       if (binary_format) {  
         f.serialize_load<boost::archive::binary_iarchive, T>(t);
       } else {
-        std::cout <<"load NON-BINARY \n";
-        std::cout << openmode << "\n";
         f.serialize_load<boost::archive::text_iarchive, T>(t);
       }
       f.close();

@@ -6,6 +6,7 @@
 
 namespace libcf {
 
+ // count lines loaded (line_num)  and lines skipped (line_skipped) from data file
 void FileLineReader::load() {
   Timer t;
   File f(filename_, "r");
@@ -22,6 +23,7 @@ void FileLineReader::load() {
     ++line_num;
   }
   f.close();
+
   loaded_successfully_ = true;
   LOG(INFO) << line_num << " lines loaded from file " << filename_ 
       << " in " << t ; 

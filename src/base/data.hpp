@@ -87,10 +87,14 @@ class Data {
   void set_label_type(const LabelType& lt) {
     //CHECK_EQ(lt, CONTINUOUS);
     data_info_->label_info_ = FeatureGroupInfo(DENSE);
+
+    std::cout << "set_label_type " << FeatureGroupInfo(DENSE) << std::endl;
   }
 
   void add_feature_group(const FeatureType& ft) {
     data_info_->feature_group_infos_.push_back(FeatureGroupInfo(ft));  
+
+    std::cout << "add_feature_group " << FeatureGroupInfo(ft) << std::endl;
   }
 
   template<class Func>

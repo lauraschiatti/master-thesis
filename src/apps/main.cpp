@@ -40,17 +40,10 @@ std::string dataset_filepath = dataset_dir + dataset + "_dataset/u.data";
 
 DEFINE_string(input_file, dataset_filepath, "input data"); 
  
-// dataset binaries 
-// DEFINE_string(cache_file, dataset_bin_dir + dataset + ".bin", "cache file"); 
-// DEFINE_string(train_cache_file, dataset_bin_dir + dataset + ".train.bin", "cached train file"); 
-// DEFINE_string(test_cache_file, dataset_bin_dir + dataset + ".test.bin", "cached test file"); 
-
-DEFINE_string(cache_file, dataset_bin_dir + dataset + ".txt", "cache file"); 
-DEFINE_string(train_cache_file, dataset_bin_dir + dataset + ".train.txt", "cached train file"); 
-DEFINE_string(test_cache_file, dataset_bin_dir + dataset + ".test.txt", "cached test file"); 
-
-// ============================================================================================= //
-// ============================================================================================= //
+// serialized Data files 
+DEFINE_string(cache_file, dataset_bin_dir + dataset + ".bin", "cache file"); 
+DEFINE_string(train_cache_file, dataset_bin_dir + dataset + ".train.bin", "cached train file"); 
+DEFINE_string(test_cache_file, dataset_bin_dir + dataset + ".test.bin", "cached test file"); 
 
 DEFINE_string(task, "train", "Task type");  
 DEFINE_int32(seed, 20141119, "Random Seed");  // default 
@@ -86,9 +79,6 @@ DEFINE_bool(user_factor, true, "using user factor"); // false=DAE, true=CDAE
 DEFINE_bool(asym, true, "Asymmetric DAE"); // false=TW, true=NTW 
 
 
-// ============================================================================================= //
-// ============================================================================================= //
-
 int main(int argc, char* argv[]) {
   using namespace libcf;
   
@@ -107,122 +97,129 @@ int main(int argc, char* argv[]) {
 // ============================================================================================= //
 
   /**
-   * Data preparation
+   * Dataset files format
   */
 
   int line_size;
-  std::string split;
+  std::string delimiter;
   bool skip_header;
 
   if (dataset == "movielens_10m" || dataset == "movielens_1m") {
     // data format: UserID::MovieID::Rating::Timestamp
     line_size = 4; 
-    split = ": ";
+    delimiter = ": ";
     skip_header = false;
 
   } else if (dataset == "movielens_100k") {
     // data format: UserID\tMovieID\tRating\tTimestamp
     line_size = 4; 
-    split = "\t ";
+    delimiter = "\t ";
     skip_header = false;
   
   } else if (dataset == "politic_old" || dataset == "politic_new"){   
     // data format: legislatorID\tbillID\tcount
     line_size = 3; 
-    split = "\t ";
+    delimiter = "\t ";
     skip_header = false; 
 
   } else if(dataset == "yelp"){
     // data format: user_id,business_id,stars,date
     line_size = 4; 
-    split = ", ";
+    delimiter = ", ";
     skip_header = true;
   
   } else if(dataset == "netflix_prize"){
     // data format: userId,movieId,rating,timestamp
     line_size = 4; 
-    split = ", ";
+    delimiter = ", ";
     skip_header = true;
   }
 
+    
+  /**
+   * Initial dataset loading and preprocessing
+  */
 
-  // create data binary
   std::ifstream data_file;
   data_file.open(FLAGS_cache_file);
   
   if (!data_file){ // data binary file does not exist 
     std::cout<<"TASK: prepare \n";
 
+    // breaks a sequence of characters into tokens and perform tokenizing
+    // Output is like: <Hello> <world> <foo> <bar> <yow> <baz> 
     auto line_parser = [&](const std::string& line) {
-      auto rets = split_line(line, split); // rets[2KNPtV5E44vAiEr5BvMkUA,eJpr6Ks8pr4bmvDVPTN-Xg,2,2012-06-11]
-      // LOG(ERROR) << "rets" << rets;
-      // LOG(ERROR) << "rets" << rets.size();
-      // LOG(ERROR) << "line_size" << line_size;
+      
+      // rets are the tokenized lines: std::vector<std::string> rets;  
+      auto rets = split_line(line, delimiter);
       CHECK_EQ(rets.size(), line_size); 
-      return std::vector<std::string>{rets[0], rets[1], "1"};
+
+      // users => rets[0], items => rets[1], ratings => rets[2]
+      // when parsing lines, keep users and items as they are and convert kept ratings into "1"
+      return std::vector<std::string>{rets[0], rets[1], "1"}; 
     };
 
-    Data data;
-    // give format to "Data set summary" (on logs file)
+    Data data; 
+    LOG(INFO) << "Initial Data loading => formatting.\n";
+    // data contains data_info_ (dataset summary) and instances_ (dataset)
     data.load(FLAGS_input_file, RECSYS, line_parser, skip_header); 
 
-    // generate dataset(.bin) file
-    save(data, FLAGS_cache_file, false); // binary_format = false
+    //serialize data object and save on cache_file (entire dataset)
+    save(data, FLAGS_cache_file);
   }
 
-  // split data
+
+  /**
+   * Data splitting
+  */
+
   std::ifstream train_file;
   train_file.open(FLAGS_train_cache_file);
    
-  if (!train_file){ // train binary file does not exist
+  if (!train_file){ // if train file does not exist
     std::cout<<"TASK: split \n";
 
-    Random::seed(FLAGS_seed); // use the same seed to split the data 
+    // init random number generator: use the same seed to split the data 
+    Random::seed(FLAGS_seed);  
 
+    LOG(INFO) << "Data loading for splitting.\n";
     Data data;
-    load(FLAGS_cache_file, data, false);
+    load(FLAGS_cache_file, data);
     LOG(INFO) << data; 
-    
+
+    // data.get_feature_pair_label_hashtable(0, 1);
+
     Data train, test;
     data.random_split_by_feature_group(train, test, 0, FLAGS_holdout_perc);
     LOG(INFO) << train;
     LOG(INFO) << test;
+
+    return 0;
 
     save(train, FLAGS_train_cache_file);
     save(test, FLAGS_test_cache_file);
   }  
 
   /**
-   * Loading data  
+   * Data loading
   */
-
   std::cout << "TASK: loading data \n";
   Data train, test;
 
-  if (FLAGS_task == "train") {
-    std::cout << "TASK: train \n";
+  load(FLAGS_train_cache_file, train);
+  load(FLAGS_test_cache_file, test);
 
-    Random::seed(FLAGS_seed); // use the same seed to split the data 
-    
-    Data data;
-    load(FLAGS_cache_file, data);
-    LOG(INFO) << data; 
-    data.random_split_by_feature_group(train, test, 0, 0.2);
-    LOG(INFO) << train;
-    LOG(INFO) << test;
-
-  } if (FLAGS_task == "test") {
-    std::cout << "TASK: test \n";
-    load(FLAGS_train_cache_file, train);
-    load(FLAGS_test_cache_file, test);
-  
-  }
+  // if (FLAGS_task == "train") {
+  //   std::cout << "TASK: train \n";
+  // } if (FLAGS_task == "test") {
+  //   std::cout << "TASK: test \n";
+  // }
 
   // ============================================================================================= //
   // ============================================================================================= //
 
   /**
-  * Model  
+  * Model setup
   */
 
   // experiments models

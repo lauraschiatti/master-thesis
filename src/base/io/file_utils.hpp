@@ -14,10 +14,14 @@ namespace libcf {
 
 inline std::vector<std::string> split_line(const std::string& line, 
                                     const std::string& delimiters = " ") {
+  
   std::vector<std::string> rets;  
   if (line.size() == 0) return rets;
-  boost::char_separator<char> sep(delimiters.c_str());
-  boost::tokenizer<boost::char_separator<char>> tokens(line, sep);
+
+  boost::char_separator<char> sep(delimiters.c_str()); // break seq of chars into tokens
+  
+  // iterate over partial expressions in a string by interpreting certain characters as separators.
+  boost::tokenizer<boost::char_separator<char>> tokens(line, sep); 
   for (auto it = tokens.begin(); it != tokens.end(); ++it){
     rets.push_back(*it);
   }
