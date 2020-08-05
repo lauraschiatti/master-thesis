@@ -187,11 +187,11 @@ int main(int argc, char* argv[]) {
     load(FLAGS_cache_file, data);
     LOG(INFO) << data; 
 
-    // data.get_feature_pair_label_hashtable(0, 1);
-
     Data train, test;
-    data.random_split_by_feature_group(train, test, 0, FLAGS_holdout_perc);
+    data.random_split_by_feature_group(train, test, 0, FLAGS_holdout_perc, dataset);
+    LOG(INFO) << "Training set.\n";
     LOG(INFO) << train;
+    LOG(INFO) << "Test set.\n";
     LOG(INFO) << test;
 
     return 0;
