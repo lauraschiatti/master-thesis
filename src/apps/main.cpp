@@ -170,7 +170,7 @@ int main(int argc, char* argv[]) {
 
 
   /**
-   * Data splitting
+   * Initial data splitting
   */
 
   std::ifstream train_file;
@@ -193,8 +193,6 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << train;
     LOG(INFO) << "Test set.\n";
     LOG(INFO) << test;
-
-    return 0;
 
     save(train, FLAGS_train_cache_file);
     save(test, FLAGS_test_cache_file);

@@ -180,16 +180,17 @@ class CDAE : public RecsysModelBase {
   }
   
   /**
-   * CDAE input: sample corrupted rating vector 
-   * using mask-out/drop-out corruption
+   * CDAE input: sample corrupted set of rated items
+   * using mask-out/drop-out corruption??
   */
-   unordered_map<size_t, double> get_corrupted_input(const  unordered_map<size_t, double>& input_set, 
+  unordered_map<size_t, double> get_corrupted_input(const  unordered_map<size_t, double>& input_set, 
                                           double corruption_ratio) const {
-     unordered_map<size_t, double> rets;
+    // corrupted_item_set                                            
+    unordered_map<size_t, double> rets;
 
     // non-zero values in yu are randomly dropped out independently 
     // with probability corruption_ratio (q)
-    rets.reserve(static_cast<size_t>(input_set.size() * (1. - corruption_ratio)));
+    rets.reserve(static_cast<size_t>(input_set.size() * (1. - corruption_ratio))); 
     for (auto& p : input_set) {
       if (Random::uniform() > corruption_ratio) {
         rets.insert(p);
@@ -202,8 +203,8 @@ class CDAE : public RecsysModelBase {
    * Train CDAE on corrupted input of a given user
   */
   void train_one_user_corruption(size_t uid, 
-                                const  unordered_map<size_t, double>& input_set,  // corrupted item set
-                                const  unordered_map<size_t, double>& output_set)  // 
+                                const  unordered_map<size_t, double>& input_set,  // corrupted_item_set
+                                const  unordered_map<size_t, double>& output_set)  // original item_set 
                                 {
     
     // scale input
@@ -212,7 +213,7 @@ class CDAE : public RecsysModelBase {
       scale /= (1. - corruption_ratio_);
     }
 
-    // map input into a hidden representation Zu 
+    // map corrupted input into a hidden representation Zu 
     // apply h(.) mapping function
     DVector z = get_hidden_values(uid, input_set, scale);
     
@@ -452,7 +453,8 @@ class CDAE : public RecsysModelBase {
     // += W^T.yu~
     for (auto& p : item_set) {
       size_t iid = p.first; 
-      h1 += W.row(iid) * scale;
+      h1 += W.row(iid) * scale; // DVectorSlice object representing the iid row
+
     }
     
     if (linear_function_) { 

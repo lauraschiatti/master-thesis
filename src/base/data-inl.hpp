@@ -243,9 +243,11 @@ Data::instance_iterator Data::end(const Instance& ins) const {
   return instance_iterator(*this, ins, ins.size(), 0);
 }
 
+
 void Data::shuffle_data() {
   Random::shuffle(std::begin(instances_), std::end(instances_));
 }
+
 
 
 void Data::random_split(Data& train, Data& test, double test_ratio) const {
@@ -273,8 +275,56 @@ void Data::random_split(Data& train, Data& test, double test_ratio) const {
   test = Data(std::move(test_ins_vec), data_info_);
 }
 
+
+void save_train_test_data_split(std::vector<Instance> data_vector, 
+                                std::string filename){
+
+  // open the file
+  std::ofstream out;
+  out.open(filename, std::ofstream::out); // | std::ofstream::app);
+  out.clear(); // reset file
+  std::cout << filename << " size: " << data_vector.size() << std::endl;
+
+  // size_t num_lines = std::min(size_t{10}, data_vector.size());
+  size_t num_lines = data_vector.size();
+  for (size_t line_idx = 0; line_idx < num_lines; ++line_idx) {
+    auto& ins = data_vector[line_idx]; // each line in the file is an instance
+
+  // get # of feature groups of an instance  =>  users: 0, items: 1
+  // std::cout << ins.num_feature_groups() << std::endl; // 2
+
+    // get user_id of the instance
+    size_t fg_idx = 0;
+    auto user_id = ins.get_feature_group_index(fg_idx,0); 
+
+    // get item_id of the instance
+    fg_idx = 1;
+    auto item_id = ins.get_feature_group_index(fg_idx,0); 
+    auto rating = ins.label();
+
+    // out << ins << std::endl; 
+    // out << "{ user_id: "<< user_id << " item_id: "<< item_id << " rating: " << rating << "} " << std::endl; 
+    out << user_id << "\t"<< item_id << "\t" << rating << std::endl; 
+
+  // size_t fg_idx = 0;
+  //   out << "{Label: " << ins.label() << "}, " << "{Feature Groups: ["; 
+  //   out << ins.num_feature_groups() << std::endl; // 2
+  //   for (size_t idx = 0; idx < ins.feature_group_size(0); ++idx) {
+  //     out << "{" << ins.get_feature_group_index(0, idx) << ": " << ins.get_feature_group_value(0, idx) << "}\n";
+  //     // if (ins.get_feature_group_index(0, idx) < ins.feature_group_size(0); - 1) out << ", ";
+  //     // ++fg_idx;
+  //   }
+  //   out << "]";
+
+  }
+
+  out.close();
+}
+
+
 void Data::random_split_by_feature_group(Data& train, Data& test,
-                                         size_t feature_group_idx, double test_ratio) const {
+                                         size_t feature_group_idx, double test_ratio, 
+                                         std::string dataset) const {
 
   Timer timer;
 
@@ -294,18 +344,17 @@ void Data::random_split_by_feature_group(Data& train, Data& test,
   size_t num_test;
 
   for (auto iter = fg_idx_ins_idx_hashtable.begin(); iter != fg_idx_ins_idx_hashtable.end(); ++iter) {
-    
     auto& tmp_vec = iter->second; // iter->second is the value. The key is iter->first. 
-    
+
+    // randomly select up to test_ratio interactions by user (idx) for test data (test_ins_vec)    
     Random::shuffle(std::begin(tmp_vec), std::end(tmp_vec));
 
-    // get up to test_ratio interactions by user for test data (test_ins_vec)
     num_test = static_cast<size_t>(tmp_vec.size() * test_ratio);
     
     for(size_t idx = 0; idx < tmp_vec.size(); ++idx) {
       // std::cout<<"idx: "<<idx<<std::endl;
       if (idx < num_test) {
-        test_ins_vec.push_back(instances_[tmp_vec[idx]]);  // adds a new element at the end of the vector, 
+        test_ins_vec.push_back(instances_[tmp_vec[idx]]); 
       } else {
         train_ins_vec.push_back(instances_[tmp_vec[idx]]);
       }
@@ -318,91 +367,23 @@ void Data::random_split_by_feature_group(Data& train, Data& test,
 
   std::cout << "train_ins_vec.size() = " << train_ins_vec.size() << std::endl;
   std::cout << "test_ins_vec.size() = " << test_ins_vec.size() << std::endl;
-  std::cout << "dataset size() = " << size() << std::endl;
+  std::cout << dataset << " size() = " << size() << std::endl;
 
   Random::shuffle(std::begin(train_ins_vec), std::end(train_ins_vec));
   Random::shuffle(std::begin(test_ins_vec), std::end(test_ins_vec));
 
-
-  // @TODO: save train and test data in a non-serialied way
-  // check data getters
-
-  // std::vector<Instance> train_ins_vec;
-
-  // open the File
-  std::ofstream out;
-  out.open("train.txt", std::ofstream::out | std::ofstream::app);
-
-  out << "Head of the data set:\n"; 
-  size_t num_lines = std::min(size_t{2}, train_ins_vec.size());
-
-  for (size_t line_idx = 0; line_idx < num_lines; ++line_idx) {
-    auto& ins = train_ins_vec[line_idx];
-    // print instance 
-    // out << "  " << ins << std::endl;  
-    
-    size_t fg_idx = 0;
-
-    // for each feature group => users: 0, items: 1
-    // getters: 
-  
-    /* size_t feature_group_size(size_t fg_idx) const {
-      return feat_groups_[fg_idx].size();
-    }
-
-    size_t get_feature_group_index(size_t fg_idx, size_t idx) const {
-      return feat_groups_[fg_idx].index(idx);
-    }
-
-    double get_feature_group_value(size_t fg_idx, size_t idx) const {
-      return feat_groups_[fg_idx].value(idx);
-    } */
-
-    // for(auto& fg : ins.feat_groups_) {
-    //   if (fg_idx == 0) out << "{ user_id: " << fg << "}";
-    //   else out << "{ item_id: " << fg << "}";
-    //   // stream << "{" << fg_idx << ": " << fg << "}";
-    //   // if (fg_idx < ins.feat_groups_.size() - 1) stream << ", ";
-    //   ++fg_idx;
-    // }
-    out << "{label: " << ins.label() << "}"; 
-  }
-  
-
-  // // size_t fg_idx = 0;
-  // out << "{Label: " << ins.label() << "}, " << "{Feature Groups: ["; 
-  // // for users
-  // for (size_t idx = 0; idx < ins.feature_group_size(0); ++idx) {
-  //   out << "{" << ins.get_feature_group_index(0, idx) << ": " << ins.get_feature_group_value(0, idx) << "}\n";
-  //   // if (ins.get_feature_group_index(0, idx) < ins.feature_group_size(0); - 1) out << ", ";
-  //   // ++fg_idx;
-  // }
-  out << "]";
-
-  out.close();
-
-  // std::cout << "map" << std::endl;
-  //   std::unordered_map<vector<size_t>, double> map; // vector<size_t> = [user_id, item_id], double = label
-
-  //   for (auto& v : outer_iter->second) {
-  //     //tmp_vec[idx++] = std::make_pair(instances_[v].get_feature_group_index(feature_group_idx_b, 0) + feature_group_start_idx(feature_group_idx_b), instances_[v].label());
-  //     tmp_map.insert(std::make_pair(instances_[v].get_feature_group_index(feature_group_idx_b, 0), instances_[v].label()));
-  //   }
-
-    // display contents of tmp_map
-    // for (auto it = tmp_map.begin(); it != tmp_map.end(); ++it)
-    //     std::cout << " [" << it->first << ", " << it->second << "]";
-    // std::cout << std::endl;
-  
+  // save train and test data in a non-serialied way 
+  std::string dir = "data/bin/";
+  std::string train_filename = dataset + "_train.txt";
+  save_train_test_data_split(train_ins_vec, dir + train_filename);
+  std::string test_filename = dataset + "_test.txt";
+  save_train_test_data_split(test_ins_vec, dir + test_filename);
 
   train = Data(std::move(train_ins_vec), data_info_);
   test = Data(std::move(test_ins_vec), data_info_);
 
   LOG(INFO) << "Finished splitting data set in " << timer;
 }
-
-
-
 
 // void Data::inplace_random_split_by_feature_group(Data& train, Data& test,
 //                                          size_t feature_group_idx, double test_ratio)  {
@@ -476,7 +457,8 @@ Data::get_feature_ins_idx_hashtable(size_t feature_group_idx) const {
 
     // check whether feature_group_idx size corresponds to a single feature group
     CHECK_EQ(iter->feature_group_size(feature_group_idx), 1); 
-
+	
+	// if feature_group_idx = 0 => it returns the user IDs  		
     ft_idx = iter->get_feature_group_index(feature_group_idx, 0) 
         + feature_group_start_idx(feature_group_idx);  // 0
     
@@ -488,12 +470,16 @@ Data::get_feature_ins_idx_hashtable(size_t feature_group_idx) const {
       CHECK_LT(ft_idx, total_dimensions());
     }
     
-    fg_idx_ins_id_pair_vec.emplace_back(ft_idx, idx++); // appends a new element to the end of the container.
-
+    // appends the original feature IDs and the corresponding position in the vector
+    fg_idx_ins_id_pair_vec.emplace_back(ft_idx, idx++); 
+    
+	  
     // std::cout << "fg_idx_ins_id_pair_vec" << fg_idx_ins_id_pair_vec;
     /*fg_idx_ins_id_pair_vec[(0,0),(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),...,(18,3242),(52,3243),(226,3244),(173,3245),(118,3246),(169,3247),(118,3248),(110,3249),(122,3250),(105,3251)]
     fg_idx_ins_id_pair_vec[(0,0),(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),...,(52,3243),(226,3244),(173,3245),(118,3246),(169,3247),(118,3248),(110,3249),(122,3250),(105,3251),(26,3252)]*/
-  }
+
+
+    // std::cout << "fg_idx_ins_id_pair_vec" << fg_idx_ins_id_pair_vec;
 
   CHECK_EQ(idx, size());
   CHECK_EQ(fg_idx_ins_id_pair_vec.size(), size()); 
@@ -609,5 +595,6 @@ Data::get_feature_pair_label_hashtable(size_t feature_group_idx_a,
   return std::move(rets);
 }
 
-} // namesapce 
 
+
+} // namesapce 

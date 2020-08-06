@@ -47,8 +47,11 @@ size_t FeatureGroupInfo::size() const {
 FeatureGroup::FeatureGroup(FeatureGroupInfo& fg_info,
                            const std::string& str) {
 
-  ft_ = fg_info.feature_type();
-  std::vector<std::string> values = split_line(str, " ");
+  ft_ = fg_info.feature_type(); // <FeatureType> => { DENSE, SPARSE, SPARSE_BINARY }
+  
+  // split feature values as tokens "test   test2   test3"
+  std::vector<std::string> values = split_line(str, " "); 
+  
   if (fg_info.feature_type() == DENSE) {
     // format: 1 2 4 5 6 7 
     feat_vals.resize(values.size());
@@ -61,18 +64,27 @@ FeatureGroup::FeatureGroup(FeatureGroupInfo& fg_info,
     std::transform(values.begin(), 
                    values.end(),
                    feat_vals.begin(),
-                   [](const std::string& str){
-                   return std::stod(str);
-                   });
-  } else if (fg_info.feature_type() == SPARSE_BINARY) {
+                    [](const std::string& str){
+                    return std::stod(str);
+                    }
+                   );
+
+
+  } else if (fg_info.feature_type() == SPARSE_BINARY) {  // users and items: {type : SPARSE_BINARY}, {size: x}
+    
     // format: 1 2 4 5 6 7 
-    feat_ids.resize(values.size());
-    std::transform(values.begin(), 
-                   values.end(),
-                   feat_ids.begin(),
-                   [&](const std::string& str){
-                   return fg_info.get_index(str, true);
-                   }
+    // change size of feat_ids, so it contains values.size() elements.
+    feat_ids.resize(values.size()); 
+
+    // transform range: Applies op to each of the elements in the range [first1,last1) 
+    // and stores the value returned by each operation in the range that begins at result.
+    std::transform(values.begin(),                        // InputIterator first1,
+                  values.end(),                           // InputIterator last1
+                  feat_ids.begin(),                         // OutputIterator result
+                  [&](const std::string& str){              // UnaryOperation op
+                        // get new index
+                        return fg_info.get_index(str, true); // key, allow_new_value
+                    }
                   );
 
   } else {

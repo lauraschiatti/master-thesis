@@ -146,8 +146,10 @@ class Instance {
 
   void add_feat_group(FeatureGroupInfo& fg_info,
                       const std::string& str) {
+    
     feat_groups_.push_back(FeatureGroup(fg_info, str));   
-    size_ += feat_groups_.back().size();
+    size_ += feat_groups_.back().size(); //.back() access last element
+
   }
 
   void add_feat_group(const std::vector<double>& vec) {

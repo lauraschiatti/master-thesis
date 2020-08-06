@@ -157,11 +157,11 @@ class Data {
 
   void random_split_by_feature_group(Data& train, Data& test,
                                      size_t feature_group_idx, 
-                                     double test_ratio) const;
+                                     double test_ratio, std::string dataset) const;
   
-  void inplace_random_split_by_feature_group(Data& train, Data& test,
-                                     size_t feature_group_idx, 
-                                     double test_ratio);
+  // void inplace_random_split_by_feature_group(Data& train, Data& test,
+  //                                    size_t feature_group_idx, 
+  //                                    double test_ratio);
 
   std::unordered_map<size_t, std::vector<size_t>> 
       get_feature_ins_idx_hashtable(size_t feature_group_idx) const; 
