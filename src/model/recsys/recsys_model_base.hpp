@@ -64,8 +64,8 @@ class RecsysModelBase : public ModelBase {
     size_t random_item;
     while(true) {
       random_item = rand() % num_items_;
-      if (user_map.count(random_item)) {
-        continue;
+      if (user_map.count(random_item)) {  // if random_item is an element of the user_set
+        continue; 
       } else {
         break;
       }

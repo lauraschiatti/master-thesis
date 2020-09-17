@@ -249,7 +249,6 @@ void Data::shuffle_data() {
 }
 
 
-
 void Data::random_split(Data& train, Data& test, double test_ratio) const {
 
   CHECK_LT(test_ratio, 1.0);
@@ -277,7 +276,7 @@ void Data::random_split(Data& train, Data& test, double test_ratio) const {
 
 
 void save_train_test_data_split(std::vector<Instance> data_vector, 
-                                std::string filename){
+                                std::string filename) {
 
   // open the file
   std::ofstream out;
@@ -386,7 +385,8 @@ void Data::random_split_by_feature_group(Data& train, Data& test,
 }
 
 // void Data::inplace_random_split_by_feature_group(Data& train, Data& test,
-//                                          size_t feature_group_idx, double test_ratio)  {
+//                                          size_t feature_group_idx, double test_ratio,
+//                                          std::string dataset)  {
 
 //   Timer timer;
 
@@ -437,7 +437,6 @@ void Data::random_split_by_feature_group(Data& train, Data& test,
 // }
 
 
-
 std::unordered_map<size_t, std::vector<size_t>> 
 Data::get_feature_ins_idx_hashtable(size_t feature_group_idx) const {
 
@@ -458,7 +457,7 @@ Data::get_feature_ins_idx_hashtable(size_t feature_group_idx) const {
     // check whether feature_group_idx size corresponds to a single feature group
     CHECK_EQ(iter->feature_group_size(feature_group_idx), 1); 
 	
-	// if feature_group_idx = 0 => it returns the user IDs  		
+	  // if feature_group_idx = 0 => it returns the user IDs  		
     ft_idx = iter->get_feature_group_index(feature_group_idx, 0) 
         + feature_group_start_idx(feature_group_idx);  // 0
     
@@ -472,14 +471,14 @@ Data::get_feature_ins_idx_hashtable(size_t feature_group_idx) const {
     
     // appends the original feature IDs and the corresponding position in the vector
     fg_idx_ins_id_pair_vec.emplace_back(ft_idx, idx++); 
-    
+  }
 	  
-    // std::cout << "fg_idx_ins_id_pair_vec" << fg_idx_ins_id_pair_vec;
-    /*fg_idx_ins_id_pair_vec[(0,0),(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),...,(18,3242),(52,3243),(226,3244),(173,3245),(118,3246),(169,3247),(118,3248),(110,3249),(122,3250),(105,3251)]
-    fg_idx_ins_id_pair_vec[(0,0),(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),...,(52,3243),(226,3244),(173,3245),(118,3246),(169,3247),(118,3248),(110,3249),(122,3250),(105,3251),(26,3252)]*/
+  // std::cout << "fg_idx_ins_id_pair_vec" << fg_idx_ins_id_pair_vec;
+  /*fg_idx_ins_id_pair_vec[(0,0),(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),...,(18,3242),(52,3243),(226,3244),(173,3245),(118,3246),(169,3247),(118,3248),(110,3249),(122,3250),(105,3251)]
+  fg_idx_ins_id_pair_vec[(0,0),(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),...,(52,3243),(226,3244),(173,3245),(118,3246),(169,3247),(118,3248),(110,3249),(122,3250),(105,3251),(26,3252)]*/
 
 
-    // std::cout << "fg_idx_ins_id_pair_vec" << fg_idx_ins_id_pair_vec;
+  // std::cout << "fg_idx_ins_id_pair_vec" << fg_idx_ins_id_pair_vec;
 
   CHECK_EQ(idx, size());
   CHECK_EQ(fg_idx_ins_id_pair_vec.size(), size()); 

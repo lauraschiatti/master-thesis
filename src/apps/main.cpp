@@ -56,12 +56,11 @@ DEFINE_string(model_variant, "M1", "Which Model to train"); // "M1", "M2", "M3",
 DEFINE_int32(num_dim, 50, "Num of latent dimensions"); // K : num of latent dimensions (hidden neurons)
 DEFINE_int32(num_neg, 5, "Num of negative samples");  // NS
 
-// corruption level
+// input corruption
 DEFINE_int32(cnum, 1, "Num of Corruptions"); // default
-DEFINE_double(cratio, 0.0, "Corruption Ratio");
-
-// scaled input
-DEFINE_bool(scaled, false, "scaled input"); // default
+DEFINE_double(cratio, 0.8, "Corruption Ratio");
+// controls the corruption (true => scale /= 1 - corruption_ratio)
+DEFINE_bool(scaled, true, "scaled input"); 
 
 // training using SGD (and AdaGrad)
 DEFINE_int32(max_iteration, 50, "Max num of iterations"); // default
@@ -206,6 +205,12 @@ int main(int argc, char* argv[]) {
 
   load(FLAGS_train_cache_file, train);
   load(FLAGS_test_cache_file, test);
+
+  LOG(INFO) << "Training set.\n";
+  LOG(INFO) << train;
+  LOG(INFO) << "Test set.\n";
+  LOG(INFO) << test;
+
 
   // if (FLAGS_task == "train") {
   //   std::cout << "TASK: train \n";

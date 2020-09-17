@@ -3,15 +3,15 @@
 using namespace std;
 
 namespace libcf {
-  
+
+
 /*
-* Train model
-*/ 
+* Training: learning algorithm
+*/
 template<class Model>
 void Solver<Model>::train(const Data& train_data, 
                               const Data& validation_data,
                               const vector<EvalType>& eval_types) {
-
 
   double train_loss = 0;
 
@@ -62,9 +62,6 @@ void Solver<Model>::train(const Data& train_data,
     LOG(INFO) << ss.str();
   }
 
-  /*
-  * Training: learning algorithm
-  */
 
   bool stop = false;
   while(!stop) {
@@ -120,28 +117,31 @@ void Solver<Model>::test(const Data& test_data,
     evaluations[idx] = Evaluation<Model>::create(eval_types[idx]);
   }
 
-  LOG(INFO) <<  string(100, '-') <<  endl;
-  {
-    stringstream ss;
-    ss <<  setfill(' ') 
-        <<  setw(8) << "Time"  << "|";
-    if(test_data.size() > 0) {
-      for (size_t idx = 0; idx < eval_types.size(); ++idx) 
-        ss << evaluations[idx]->evaluation_type() << "|";
-    }
-    LOG(INFO) << ss.str();
-  }
+  std::cout << "TEST: test.size()" << test_data.size() << "\n";
+  std::cout << "model: " << model_ << "\n";
 
-  {
-    stringstream ss;
-    ss <<  setw(8) <<  setprecision(3) << t.elapsed() << "|";
-    if (test_data.size() > 0) {
-      for (size_t idx = 0; idx < eval_types.size(); ++idx) 
-        ss << evaluations[idx]->evaluate(*model_, test_data) << "|";
-      cout << "ok";
-    }
-    LOG(INFO) << ss.str();
-  }
+  // LOG(INFO) <<  string(100, '-') <<  endl;
+  // {
+  //   stringstream ss;
+  //   ss <<  setfill(' ') 
+  //       <<  setw(8) << "Time"  << "|";
+  //   if(test_data.size() > 0) {
+  //     for (size_t idx = 0; idx < eval_types.size(); ++idx) 
+  //       ss << evaluations[idx]->evaluation_type() << "|";
+  //   }
+  //   LOG(INFO) << ss.str();
+  // }
+
+  // {
+  //   stringstream ss;
+  //   ss <<  setw(8) <<  setprecision(3) << t.elapsed() << "|";
+  //   if (test_data.size() > 0) {
+  //     for (size_t idx = 0; idx < eval_types.size(); ++idx) 
+  //       ss << evaluations[idx]->evaluate(*model_, test_data) << "|";
+  //     cout << "ok";
+  //   }
+  //   LOG(INFO) << ss.str();
+  // }
 }
 
 } // namespace

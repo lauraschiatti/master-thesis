@@ -93,6 +93,8 @@ class CDAE : public RecsysModelBase {
       for (size_t jid = 0; jid < num_corruptions_; ++jid) {
         auto corrpted_item_set = get_corrupted_input(item_set, corruption_ratio_);
         double scale = 1;
+
+        // std::cout << "data_loss get_corrupted_input: " << corrpted_item_set.size() << "\n";
         
         if (scaled_) {
          scale /=  (1. - corruption_ratio_) ;
@@ -145,14 +147,28 @@ class CDAE : public RecsysModelBase {
     b_ag = DVector::Ones(num_dim_) * 0.0001;
     b_prime = DVector::Zero(num_items_);
     b_prime_ag = DVector::Ones(num_items_) * 0.0001;
-    bu = DVector::Zero(num_users_);
-    bu_ag = DVector::Ones(num_users_) * 0.0001;
+    // bu = DVector::Zero(num_users_);
+    // bu_ag = DVector::Ones(num_users_) * 0.0001;
 
     // user-specific matrix Uu
     if (linear_function_) { 
       Uu = DMatrix::Constant(num_users_, num_dim_, 1.);
       Uu_ag = DMatrix::Constant(num_users_, num_dim_, 0.0001);
     }
+
+    LOG(INFO) << "CDAE parameters initialization: \n" 
+        << "\t{init_scale: " << init_scale << "}, "
+        << "{W size: " << W.size() << "}, "
+        << "{W_ag size: " << W_ag.size() << "}\n"
+        << "\t{V size: " << V.size() << "}, "
+        << "{V_ag size: " << V_ag.size() << "}, "
+        << "{Wu size: " << Wu.size() << "}\n"
+        << "\t{Wu_ag size: " << Wu_ag.size() << "}, "
+        << "{b size: " << b.size() << "}, "
+        << "{b_ag size: " << b_ag.size() << "}\n"
+        << "\t{b_prime size: " << b_prime.size() << "}, "
+        << "{b_prime_ag size: " << b_prime_ag.size() << "}, "; 
+
   } 
 
   /**
@@ -162,40 +178,61 @@ class CDAE : public RecsysModelBase {
 
     // for all users
     for (size_t uid = 0; uid < num_users_; ++uid) { 
+
+      std::cout<<"user_id: " << uid << "\n";
       
       // get rated items for user u
       auto it = user_rated_items_.find(uid);  // iterator (key/value, first/second)
       CHECK(it != user_rated_items_.end()); // iterator one past the end 
       auto& item_set = it->second; // value in the map
+      // std::cout<< "get rated items => user_rated_items: " << item_set.size() << "\n";
 
       // for each corruption
       for (size_t idx = 0; idx < num_corruptions_; ++idx) {
         // CDAE input: sample corrupted rating vector 
         auto corrupted_item_set = get_corrupted_input(item_set, corruption_ratio_);
+        // std::cout << "----------------\n";
+        std::cout << "item_set size: " << item_set.size() << "\n";
+        std::cout << "corrupted_item_set size: " << corrupted_item_set.size() << "\n";
+
+        // std::cout<<"corrupted_item_set \n";
+
+        // for ( auto it = corrupted_item_set.begin(); it != corrupted_item_set.end(); ++it ){
+        //   std::cout << " " << it->first << ":" << it->second;
+        //   std::cout << std::endl;
+        // }
 
         // train CDAE on user's corrupted input
         train_one_user_corruption(uid, corrupted_item_set, item_set);
       }
+
+       std::cout<<"========================================== \n";
     }
   }
   
   /**
    * CDAE input: sample corrupted set of rated items
-   * using mask-out/drop-out corruption??
+   * using mask-out/drop-out corruption
   */
   unordered_map<size_t, double> get_corrupted_input(const  unordered_map<size_t, double>& input_set, 
                                           double corruption_ratio) const {
+
     // corrupted_item_set                                            
     unordered_map<size_t, double> rets;
 
     // non-zero values in yu are randomly dropped out independently 
     // with probability corruption_ratio (q)
     rets.reserve(static_cast<size_t>(input_set.size() * (1. - corruption_ratio))); 
+
     for (auto& p : input_set) {
-      if (Random::uniform() > corruption_ratio) {
+      // generate a random number in a range [min,max)
+      // by default: min = 0., max = 1.
+      auto random = Random::uniform(); 
+      if (random > corruption_ratio) {
         rets.insert(p);
       }
     }
+
     return rets;
   }
 
@@ -204,18 +241,25 @@ class CDAE : public RecsysModelBase {
   */
   void train_one_user_corruption(size_t uid, 
                                 const  unordered_map<size_t, double>& input_set,  // corrupted_item_set
-                                const  unordered_map<size_t, double>& output_set)  // original item_set 
+                                const  unordered_map<size_t, double>& output_set)  // input item_set 
                                 {
     
-    // scale input
+    // make corruption unbiased: 
+    // set uncorrupted item_set to 1/(1-q) its original value
     double scale = 1.;
     if (scaled_) {
       scale /= (1. - corruption_ratio_);
     }
 
+    // std::cout << "train_one_user_corruption input_set size: " <<   input_set.size() << "\n";
+
     // map corrupted input into a hidden representation Zu 
     // apply h(.) mapping function
     DVector z = get_hidden_values(uid, input_set, scale);
+
+    // std::cout << "get_hidden_values \n";
+    // for(int i=0; i < z.size(); i++)
+    // std::cout << z[i] << ' ';
     
     // ????
     DVector z_1_z =  DVector::Ones(num_dim_);
@@ -256,6 +300,9 @@ class CDAE : public RecsysModelBase {
 
       // Compute output values yui^ = f(.)
       double y = get_output_values(z, iid); // yui^ 
+
+      // std::cout << "output_set get_output_values" << y <<"\n";
+      // for(int i=0; i < z.size(); i++)
 
       // Get loss gradient
       double target = 1.;   // implicit rating where all the yui are 1
@@ -407,7 +454,9 @@ class CDAE : public RecsysModelBase {
     }
 
     // Update Wj
+    // std::cout << "user input_set";
     for (auto& p : input_set) {
+      // std::cout << p  << "\n";
       
       size_t jid = p.first;
       
@@ -446,15 +495,18 @@ class CDAE : public RecsysModelBase {
   DVector get_hidden_values(size_t uid, const  unordered_map<size_t, 
                             double>& item_set, // corrupted input set
                             double scale = 1.0) const {
+
+    // std::cout << "get_hidden_values corrupted_item_set: " << item_set.size() << "\n";
     
     // initialize h vector to zero
     DVector h1 = DVector::Zero(num_dim_); 
+
+    // std::cout << "get_hidden_values corrupted input set: " << item_set.size() << "\n";
     
     // += W^T.yu~
     for (auto& p : item_set) {
       size_t iid = p.first; 
       h1 += W.row(iid) * scale; // DVectorSlice object representing the iid row
-
     }
     
     if (linear_function_) { 
