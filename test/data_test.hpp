@@ -71,7 +71,7 @@ TEST(dataset, test_recsys_data) {
 
   LOG(INFO) << "random split : ";
   Data train, test;
-  data.random_split_by_feature_group(train, test, 0, 0.3);
+  data.random_split_by_feature_group(train, test, 0, 0.3, "netflix_prize");
   data.random_split(train, test, 0.3);
   EXPECT_EQ(train.size(), data.size() * 0.7);
   EXPECT_EQ(test.size(), data.size() * 0.3);
