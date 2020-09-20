@@ -178,35 +178,40 @@ class CDAE : public RecsysModelBase {
 
     // for all users
     for (size_t uid = 0; uid < num_users_; ++uid) { 
-
-      std::cout<<"user_id: " << uid << "\n";
-      
+        
       // get rated items for user u
       auto it = user_rated_items_.find(uid);  // iterator (key/value, first/second)
       CHECK(it != user_rated_items_.end()); // iterator one past the end 
       auto& item_set = it->second; // value in the map
-      // std::cout<< "get rated items => user_rated_items: " << item_set.size() << "\n";
 
       // for each corruption
       for (size_t idx = 0; idx < num_corruptions_; ++idx) {
         // CDAE input: sample corrupted rating vector 
         auto corrupted_item_set = get_corrupted_input(item_set, corruption_ratio_);
-        // std::cout << "----------------\n";
-        std::cout << "item_set size: " << item_set.size() << "\n";
-        std::cout << "corrupted_item_set size: " << corrupted_item_set.size() << "\n";
+        
+        
+        if (uid == 890 || uid == 114){
+          std::cout  << "user_id: " << uid << "\n";
+          std::cout << "item_set (user_rated_items) size: " << item_set.size() << "\n";
 
-        // std::cout<<"corrupted_item_set \n";
+          // for ( auto it = item_set.begin(); it != item_set.end(); ++it ){
+          //   std::cout << " " << it->first << ":" << it->second;
+          //   std::cout << std::endl;
+          // }
+        
+          std::cout << "corrupted_item_set size: " << corrupted_item_set.size() << "\n";
 
-        // for ( auto it = corrupted_item_set.begin(); it != corrupted_item_set.end(); ++it ){
-        //   std::cout << " " << it->first << ":" << it->second;
-        //   std::cout << std::endl;
-        // }
+          // for ( auto it = corrupted_item_set.begin(); it != corrupted_item_set.end(); ++it ){
+          //   std::cout << " " << it->first << ":" << it->second;
+          //   std::cout << std::endl;
+          // }
 
+      }
+     
         // train CDAE on user's corrupted input
         train_one_user_corruption(uid, corrupted_item_set, item_set);
       }
-
-       std::cout<<"========================================== \n";
+      // LOG(ERROR) << std::endl;
     }
   }
   

@@ -58,7 +58,7 @@ DEFINE_int32(num_neg, 5, "Num of negative samples");  // NS
 
 // input corruption
 DEFINE_int32(cnum, 1, "Num of Corruptions"); // default
-DEFINE_double(cratio, 0.8, "Corruption Ratio");
+DEFINE_double(cratio, 0.2, "Corruption Ratio");
 // controls the corruption (true => scale /= 1 - corruption_ratio)
 DEFINE_bool(scaled, true, "scaled input"); 
 
