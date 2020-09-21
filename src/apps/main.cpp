@@ -57,10 +57,11 @@ DEFINE_int32(num_dim, 50, "Num of latent dimensions"); // K : num of latent dime
 DEFINE_int32(num_neg, 5, "Num of negative samples");  // NS
 
 // input corruption
+DEFINE_string(corruption_type, "mask_out", "Corruption type"); // "mask_out", "with_replacement", "without_replacement"
+// params for mask_out corruption
 DEFINE_int32(cnum, 1, "Num of Corruptions"); // default
-DEFINE_double(cratio, 0.2, "Corruption Ratio");
-// controls the corruption (true => scale /= 1 - corruption_ratio)
-DEFINE_bool(scaled, true, "scaled input"); 
+DEFINE_double(cratio, 0.6, "Corruption Ratio");
+DEFINE_bool(scaled, true, "scaled input"); // controls the corruption (true => scale /= 1 - corruption_ratio)
 
 // training using SGD (and AdaGrad)
 DEFINE_int32(max_iteration, 50, "Max num of iterations"); // default
@@ -143,6 +144,7 @@ int main(int argc, char* argv[]) {
   data_file.open(FLAGS_cache_file);
   
   if (!data_file){ // data binary file does not exist 
+    std::cout << std::string(50, '-') << "\n";
     std::cout<<"TASK: prepare \n";
 
     // breaks a sequence of characters into tokens and perform tokenizing
@@ -266,6 +268,8 @@ int main(int argc, char* argv[]) {
 
   if (FLAGS_method == "CDAE") {
     std::cout << "METHOD: CDAE\n";
+    std::cout << "CORRUPTION TYPE: "<< FLAGS_corruption_type <<"\n";
+    std::cout << std::string(50, '-') << "\n";
     
     CDAEConfig config;
     config.learn_rate = FLAGS_learn_rate;
@@ -274,6 +278,7 @@ int main(int argc, char* argv[]) {
     config.asymmetric = FLAGS_asym;
     config.num_corruptions = FLAGS_cnum;
     config.corruption_ratio = FLAGS_cratio;
+    config.corruption_type = FLAGS_corruption_type;
     config.linear = model.linear;
     config.scaled = FLAGS_scaled;
     config.num_neg = FLAGS_num_neg;

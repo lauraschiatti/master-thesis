@@ -86,6 +86,22 @@ class RecsysModelBase : public ModelBase {
     return random_item;
   }
 
+  /**
+  * Interaction sampling
+  */
+  // virtual size_t sample_interaction(const  unordered_set<size_t>& user_set) const {
+  //   size_t random_item;
+  //   while(true) {
+  //     random_item = rand() % num_items_;
+  //     if (user_set.count(random_item)) {
+  //       continue;
+  //     } else {
+  //       break;
+  //     }
+  //   }
+  //   return random_item;
+  // }
+
   virtual void pre_recommend() {
     // do nothing
   }

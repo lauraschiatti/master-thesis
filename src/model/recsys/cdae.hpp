@@ -19,6 +19,7 @@ struct CDAEConfig {
   size_t num_dim = 10; 
   bool using_adagrad = true;
   double corruption_ratio = 0.5; 
+  std::string corruption_type = "mask_out";
   size_t num_corruptions = 1;
   bool asymmetric = false; 
   bool user_factor = true;
@@ -45,6 +46,7 @@ class CDAE : public RecsysModelBase {
     penalty_ = Penalty::create(mcfg.pt);
     using_adagrad_ = mcfg.using_adagrad;
     corruption_ratio_ = mcfg.corruption_ratio;
+    corruption_type_ = mcfg.corruption_type;
     num_corruptions_ = mcfg.num_corruptions;
     asymmetric_ = mcfg.asymmetric;
     user_factor_ = mcfg.user_factor;
@@ -63,10 +65,11 @@ class CDAE : public RecsysModelBase {
         << "\t{Dim: " << num_dim_ << "}, "
         << "{LearnRate: " << learn_rate_ << "}, "
         << "{Using AdaGrad: " << using_adagrad_ << "}\n"
-        << "\t{Corruption Ratio: " << corruption_ratio_ << "}, "
-        << "{Num Corruptions: " << num_corruptions_ << "}, "
-        << "{Asymmetric: " << asymmetric_ << "}\n"
-        << "\t{UserFactor: " << user_factor_ << "}, "
+        << "\t{Corruption Type: " << corruption_type_ << "}, "
+        << "{Corruption Ratio: " << corruption_ratio_ << "}, "
+        << "{Num Corruptions: " << num_corruptions_ << "}, \n"
+        << "\t{Asymmetric: " << asymmetric_ << "} "
+        << "{UserFactor: " << user_factor_ << "}, "
         << "{Linear: " << linear_ << "}, " 
         << "{Num Negative: " << num_neg_ << "}, "
         << "{Scaled: " << scaled_ << "}\n"
@@ -184,35 +187,50 @@ class CDAE : public RecsysModelBase {
       CHECK(it != user_rated_items_.end()); // iterator one past the end 
       auto& item_set = it->second; // value in the map
 
-      // for each corruption
-      for (size_t idx = 0; idx < num_corruptions_; ++idx) {
-        // CDAE input: sample corrupted rating vector 
-        auto corrupted_item_set = get_corrupted_input(item_set, corruption_ratio_);
+      /**
+       * DEFAULT CORRUPTION: 
+       * non-zero values in yu are randomly dropped out independently  
+       * with probability corruption_ratio (q)
+      */ 
+      if(corruption_type_ == "mask_out"){
+        // for each corruption
+        for (size_t idx = 0; idx < num_corruptions_; ++idx) {
+          // CDAE input: sample corrupted rating vector 
+          auto corrupted_item_set = get_corrupted_input(item_set, corruption_ratio_);
+          
+          // experimental users
+          if (uid == 890 || uid == 114){
+            std::cout << "user_id: " << uid << "\n";
+            std::cout << "item_set (user_rated_items) size: " << item_set.size() << "\n";
+            
+            for ( auto it = item_set.begin(); it != item_set.end(); ++it ){
+              std::cout << " " << it->first; // << ":" << it->second;
+              std::cout << std::endl;
+            }
+
+            std::cout << "corrupted_item_set size: " << corrupted_item_set.size() << "\n";
+            // for ( auto it = corrupted_item_set.begin(); it != corrupted_item_set.end(); ++it ){
+            //   std::cout << " " << it->first;
+            //   std::cout << std::endl;
+            // }
+          }
+          
+          // train CDAE on user's corrupted input
+          train_one_user_corruption(uid, corrupted_item_set, item_set);
+        }
+      
+      /**
+       * WITHOUT REPLACEMENT CORRUPTION: 
+       * for each user select a random interaction and remove it.
+      */ 
+    
+      } else if(corruption_type_ == "without_replacement"){
         
         
-        if (uid == 890 || uid == 114){
-          std::cout  << "user_id: " << uid << "\n";
-          std::cout << "item_set (user_rated_items) size: " << item_set.size() << "\n";
-
-          // for ( auto it = item_set.begin(); it != item_set.end(); ++it ){
-          //   std::cout << " " << it->first << ":" << it->second;
-          //   std::cout << std::endl;
-          // }
-        
-          std::cout << "corrupted_item_set size: " << corrupted_item_set.size() << "\n";
-
-          // for ( auto it = corrupted_item_set.begin(); it != corrupted_item_set.end(); ++it ){
-          //   std::cout << " " << it->first << ":" << it->second;
-          //   std::cout << std::endl;
-          // }
-
       }
-     
-        // train CDAE on user's corrupted input
-        train_one_user_corruption(uid, corrupted_item_set, item_set);
-      }
-      // LOG(ERROR) << std::endl;
+    
     }
+
   }
   
   /**
@@ -225,8 +243,6 @@ class CDAE : public RecsysModelBase {
     // corrupted_item_set                                            
     unordered_map<size_t, double> rets;
 
-    // non-zero values in yu are randomly dropped out independently 
-    // with probability corruption_ratio (q)
     rets.reserve(static_cast<size_t>(input_set.size() * (1. - corruption_ratio))); 
 
     for (auto& p : input_set) {
@@ -237,9 +253,10 @@ class CDAE : public RecsysModelBase {
         rets.insert(p);
       }
     }
-
+    
     return rets;
   }
+
 
   /**
    * Train CDAE on corrupted input of a given user
@@ -663,6 +680,7 @@ class CDAE : public RecsysModelBase {
   double learn_rate_ = 0.;
   double lambda_ = 0.;  
   double corruption_ratio_ = 0.5;
+  std::string corruption_type_ = "mask_out";
   size_t num_corruptions_ = 10;
   size_t num_neg_ = 5;
   bool using_adagrad_ = true;

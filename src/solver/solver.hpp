@@ -13,8 +13,10 @@ class Solver {
  public:
   
   Solver(Model& model, size_t max_iteration, size_t eval_iterations=1) :
-      max_iteration_(max_iteration), eval_iterations(eval_iterations),
+      max_iteration_(max_iteration), 
+      eval_iterations(eval_iterations),
       model_(std::make_shared<Model>(model))
+
   {}
 
   Solver(Model& model) : Solver(model, 1)
