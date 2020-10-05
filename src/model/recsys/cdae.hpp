@@ -92,18 +92,28 @@ class CDAE : public RecsysModelBase {
       CHECK(fit != user_rated_items_.end());
       auto& item_set = fit->second;
       double user_rets = 0;
-      
-      for (size_t jid = 0; jid < num_corruptions_; ++jid) {
-        auto corrpted_item_set = get_corrupted_input(item_set, corruption_ratio_);
-        double scale = 1;
 
-        // std::cout << "data_loss get_corrupted_input: " << corrpted_item_set.size() << "\n";
+      for (size_t jid = 0; jid < num_corruptions_; ++jid) {
         
+        double scale = 1;
+        // std::cout << "data_loss get_corrupted_input_without_replacement2: " << corrpted_item_set.size() << "\n";
+      
         if (scaled_) {
-         scale /=  (1. - corruption_ratio_) ;
+          scale /=  (1. - corruption_ratio_) ;
+        }    
+
+        // CDAE input: sample corrupted rating vector 
+        unordered_map<size_t, double> corrupted_item_set;
+        corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
+        
+        if(corruption_type_ == "mask_out"){
+          corrupted_item_set = get_corrupted_input(uid, item_set, corruption_ratio_);
+        
+        } else if(corruption_type_ == "without_replacement") {
+          corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
         }
         
-        auto z = get_hidden_values(uid, corrpted_item_set, scale);
+        auto z = get_hidden_values(uid, corrupted_item_set, scale);
         
         for (auto& p : item_set) {
           size_t iid = p.first;
@@ -111,7 +121,9 @@ class CDAE : public RecsysModelBase {
         }
       }
       rets = rets + user_rets / num_corruptions_;
+    
     });
+    
     return rets;
   }
    
@@ -187,63 +199,75 @@ class CDAE : public RecsysModelBase {
       CHECK(it != user_rated_items_.end()); // iterator one past the end 
       auto& item_set = it->second; // value in the map
 
-      /**
-       * DEFAULT CORRUPTION: 
-       * non-zero values in yu are randomly dropped out independently  
-       * with probability corruption_ratio (q)
-      */ 
-      if(corruption_type_ == "mask_out"){
-        // for each corruption
-        for (size_t idx = 0; idx < num_corruptions_; ++idx) {
-          // CDAE input: sample corrupted rating vector 
-          auto corrupted_item_set = get_corrupted_input(item_set, corruption_ratio_);
-          
-          // experimental users
-          if (uid == 890 || uid == 114){
-            std::cout << "user_id: " << uid << "\n";
-            std::cout << "item_set (user_rated_items) size: " << item_set.size() << "\n";
-            
-            for ( auto it = item_set.begin(); it != item_set.end(); ++it ){
-              std::cout << " " << it->first; // << ":" << it->second;
-              std::cout << std::endl;
-            }
+      // for each corruption
+      for (size_t idx = 0; idx < num_corruptions_; ++idx) {
+        
+        // CDAE input: sample corrupted rating vector 
+        unordered_map<size_t, double> corrupted_item_set;
+        corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
 
-            std::cout << "corrupted_item_set size: " << corrupted_item_set.size() << "\n";
+        if(corruption_type_ == "mask_out"){
+          corrupted_item_set = get_corrupted_input(uid, item_set, corruption_ratio_);
+      
+          // experimental users
+          // if (uid == 0 || uid == 890 || uid == 114){
+          //   std::cout << "user_id: " << uid << "\n";
+          //   std::cout << "item_set (user_rated_items) size: " << item_set.size() << "\n";
+            
+          //   for (auto it = item_set.begin(); it != item_set.end(); ++it ){
+          //     std::cout << " " << it->first; // << ":" << it->second;
+          //     std::cout << std::endl;
+          //   }
+
+          //   std::cout << "corrupted_item_set size: " << corrupted_item_set.size() << "\n";
             // for ( auto it = corrupted_item_set.begin(); it != corrupted_item_set.end(); ++it ){
             //   std::cout << " " << it->first;
             //   std::cout << std::endl;
             // }
-          }
-          
-          // train CDAE on user's corrupted input
-          train_one_user_corruption(uid, corrupted_item_set, item_set);
-        }
-      
-      /**
-       * WITHOUT REPLACEMENT CORRUPTION: 
-       * for each user select a random interaction and remove it.
-      */ 
-    
-      } else if(corruption_type_ == "without_replacement"){
+          // }
         
+        } else if(corruption_type_ == "without_replacement"){
+          corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
+        
+        } else if(corruption_type_ == "with_replacement"){ 
+          // TODO: DOES NOT WORK!
+        }
+
+        // train CDAE on user's corrupted input
+        train_one_user_corruption(uid, corrupted_item_set, item_set);
         
       }
-    
     }
 
   }
   
   /**
-   * CDAE input: sample corrupted set of rated items
-   * using mask-out/drop-out corruption
-  */
-  unordered_map<size_t, double> get_corrupted_input(const  unordered_map<size_t, double>& input_set, 
+   * DEFAULT CORRUPTION: multiplicative mask-out/drop-out
+   * original corruption mechanism of randomly 
+   * masking entries of the input by making them zero. 
+
+   * keeps 1-corruption_level entries of the inputs the same 
+   * and zero-out randomly selected subset of size corruption_level
+  */ 
+
+  unordered_map<size_t, double> get_corrupted_input(int uid, const  unordered_map<size_t, double>& input_set, 
                                           double corruption_ratio) const {
+
+    if (uid == 0){                                        
+      std::cout << "The original input_set. Size: " << input_set.size() << "\n";
+      for (auto it = input_set.begin(); it != input_set.end(); ++it ){
+        std::cout << " " << it->first;
+      }
+      std::cout << std::endl;
+    } 
 
     // corrupted_item_set                                            
     unordered_map<size_t, double> rets;
-
     rets.reserve(static_cast<size_t>(input_set.size() * (1. - corruption_ratio))); 
+
+    // this will produce an array of 0s and 1s where 1 has a
+    // probability of 1 - ``corruption_level`` and 0 with
+    // ``corruption_level``
 
     for (auto& p : input_set) {
       // generate a random number in a range [min,max)
@@ -253,9 +277,205 @@ class CDAE : public RecsysModelBase {
         rets.insert(p);
       }
     }
+
+    if (uid == 0){
+      std::cout << "Now the new corrupted_item_set. Size: " << rets.size() << "\n";
+      for (auto it = rets.begin(); it != rets.end(); ++it ){
+        std::cout << " " << it->first; 
+      }
+      std::cout << std::endl;
+    }
     
     return rets;
   }
+
+  /**
+   * WITHOUT REPLACEMENT CORRUPTION: 
+   * for each user with at least 2 interactions,
+   * select a random interaction and remove it from its original item_set
+  */ 
+  unordered_map<size_t, double> get_corrupted_input_without_replacement(int uid,
+                                          const unordered_map<size_t, double>& item_set) const {
+
+      
+
+    // 1) create copy of the original item_set as the corrupted_item_set as a 
+
+    if (uid == 0){
+      std::cout << "The original item_set. Size: " << item_set.size() << "\n";
+      for (auto it = item_set.begin(); it != item_set.end(); ++it ){
+        std::cout << " " << it->first;
+      }
+      std::cout << std::endl;
+    }
+
+    // different ways to copy a vector
+    //////////////////////////////////
+
+    // a) by assignment “=” operator.
+    // items in reverse order
+    // unordered_map<size_t, double> corrupted_item_set = item_set; 
+
+    // b) vector::insert 
+    // Because vectors use an array as their underlying storage, 
+    // inserting elements in positions other than the vector end causes the container 
+    // to relocate all the elements that were after position to their new positions.                              
+    unordered_map<size_t, double> corrupted_item_set;
+    corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
+    for (auto& p : item_set) {
+      corrupted_item_set.insert(p);
+    }
+
+    //////////////////////////////////
+
+    if (uid == 0){
+      std::cout << "The copy of the original item_set (corrupted_item_set). Size:" << corrupted_item_set.size() << "\n";
+      for (auto it = corrupted_item_set.begin(); it != corrupted_item_set.end(); ++it ){
+        std::cout << " " << it->first;
+      }
+      std::cout << std::endl;
+    }
+
+    // ==========================================================================
+    
+    // 2) sample a random interaction from the item_set of user uid
+    
+    // a) generate random number between 0 to input_set size
+    int interaction_idx = rand() % item_set.size() - 1;  
+
+    // b) get always the same interaction for each user
+    // int interaction_idx = item_set.size() - 1; 
+
+    if (uid == 0){
+      std::cout << "\nElement at position " << interaction_idx << " will be removed\n";
+    }
+    
+    // get an iterator to the position in item_set corresponding to the element to be removed
+    // vector using std::next
+    int index = interaction_idx;
+    auto it2 =  std::next(corrupted_item_set.begin(), index);
+    if (uid == 0){ 
+      cout << "Element at index " << index << " is: " << *it2 << '\n';
+    }
+
+    // ==========================================================================
+
+    // 3) remove the random interaction from the corrupted_item_set
+    
+    int count=0;
+    
+    for (auto it = corrupted_item_set.begin(); it != corrupted_item_set.end(); it++) {
+      if (it == it2){
+        //check that the user has at least 2 interactions
+        if(item_set.size() >= 2) { 
+          corrupted_item_set.erase(it);
+          count++;
+        } else{
+          std::cout << "uid" << uid << " has few interactions\n" ;
+        }
+        break; // exit the loop
+      }
+    }
+
+    if (uid == 0){
+      if(count == 0){
+        std::cout << "Element not found..!!\n";
+      } else{
+        std::cout << "Element deleted successfully..!!\n";
+        
+        std::cout << "Now the new corrupted_item_set. Size: " << corrupted_item_set.size() << "\n";
+        for (auto it = corrupted_item_set.begin(); it != corrupted_item_set.end(); ++it ){
+          std::cout << " " << it->first; 
+        }
+        std::cout << std::endl;
+      }
+
+    }
+    
+
+    return corrupted_item_set;
+
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+  unordered_map<size_t, double> get_corrupted_input_without_replacement2(int uid,
+                                          const unordered_map<size_t, double>& item_set) const {
+
+
+    if (uid == 0){
+      std::cout << "uid 0\n";
+      std::cout << "The original item_set. Size: " << item_set.size() << "\n";
+      for (auto it = item_set.begin(); it != item_set.end(); ++it ){
+        std::cout << " " << it->first;
+      }
+      std::cout << std::endl;
+    }
+
+    // 1) sample a random interaction from the item_set of user uid
+    
+    // a) generate random number between 0 to input_set size
+    int interaction_idx = rand() % item_set.size() - 1;  
+
+    // b) get always the same interaction for each user
+    // int interaction_idx = item_set.size() - 1;  // same results when removed 1st and last interaction
+
+    if (uid == 0){
+      std::cout << "\nElement at position " << interaction_idx << " will be removed\n";
+    }
+    
+    // get an iterator to the position in item_set corresponding to the element to be removed
+    // vector using std::next
+    int index = interaction_idx;
+    auto it2 =  std::next(item_set.begin(), index);
+    if (uid == 0){ 
+      cout << "Element at index " << index << " is: " << *it2 << '\n';
+    }
+
+    // 2) append all the items to the the corrupted_item_set but the interaction to be removed 
+
+    unordered_map<size_t, double> corrupted_item_set;
+    corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
+
+    // int count = 0;
+
+    if(item_set.size() >= 2) { 
+      for (auto it = item_set.begin(); it != item_set.end(); ++it ){
+        if(it != it2){
+          corrupted_item_set.insert(*it);
+          // count++;
+        }
+      }
+
+    } else {
+      std::cout << "uid" << uid << " has few interactions\n" ;
+      for (auto it = item_set.begin(); it != item_set.end(); ++it ){
+        corrupted_item_set.insert(*it);
+      }
+    }
+
+
+    if (uid == 0){
+      // if(count == 0){
+      //   std::cout << "Element not found..!!\n";
+      // } else{
+      //   std::cout << "Element deleted successfully..!!\n";
+        std::cout << "uid 0\n";
+        std::cout << "Now the new corrupted_item_set. Size: " << corrupted_item_set.size() << "\n";
+        for (auto it = corrupted_item_set.begin(); it != corrupted_item_set.end(); ++it ){
+          std::cout << " " << *it; 
+        }
+        std::cout << std::endl;
+      // }
+    }
+
+    return corrupted_item_set;
+  }
+
+
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
   /**

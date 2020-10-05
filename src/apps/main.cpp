@@ -57,10 +57,10 @@ DEFINE_int32(num_dim, 50, "Num of latent dimensions"); // K : num of latent dime
 DEFINE_int32(num_neg, 5, "Num of negative samples");  // NS
 
 // input corruption
-DEFINE_string(corruption_type, "mask_out", "Corruption type"); // "none", "mask_out", "without_replacement", "with_replacement"
+DEFINE_string(corruption_type, "without_replacement", "Corruption type"); // "none", "mask_out", "without_replacement", "with_replacement"
 // params for mask_out corruption
 DEFINE_int32(cnum, 1, "Num of Corruptions"); // default
-DEFINE_double(cratio, 0.6, "Corruption Ratio");
+DEFINE_double(cratio, 0.0, "Corruption Ratio");
 DEFINE_bool(scaled, true, "scaled input"); // controls the corruption (true => scale /= 1 - corruption_ratio)
 
 // training using SGD (and AdaGrad)

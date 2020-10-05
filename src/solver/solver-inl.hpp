@@ -67,6 +67,7 @@ void Solver<Model>::train(const Data& train_data,
   while(!stop) {
 
     // one iteration
+    std::cout << "\n" << std::string(40, '-')<< "\n"; 
     std::cout << "iteration: " << iteration << "\n";
     std::cout << std::string(40, '-')<< "\n"; 
     train_one_iteration(train_data);
