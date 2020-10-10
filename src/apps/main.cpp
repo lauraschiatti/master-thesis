@@ -20,9 +20,13 @@
 std::string dataset_dir = "data/";
 std::string dataset_bin_dir = "data/bin/";
 
-std::string dataset = "movielens_100k";
-const char * log_file = "log/movielens_100k_implicit.log";
-std::string dataset_filepath = dataset_dir + dataset + "_dataset/u.data";
+// std::string dataset = "movielens_100k";
+// const char * log_file = "log/movielens_100k_implicit.log";
+// std::string dataset_filepath = dataset_dir + dataset + "_dataset/u.data";
+
+std::string dataset = "movielens_1m"; // movielens_1m
+const char * log_file = "log/movielens_1m_implicit.log";
+std::string dataset_filepath = dataset_dir + dataset + "_dataset/ratings.dat";
 
 // std::string dataset = "movielens_10m"; // movielens_1m
 // const char * log_file = "log/movielens_10m_implicit.log";
