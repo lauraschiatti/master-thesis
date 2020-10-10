@@ -266,6 +266,11 @@ int main(int argc, char* argv[]) {
     std::cout << "MODEL: M4";
     // Model M4: h(.) = sigmoid, f(.) = sigmoid, l(.) = LOGISTIC
     model = {.linear = false, .tanh = false, .linear_function = false, .sigmoid_output = true, .loss_type = "LOGISTIC"};
+  
+  } else if(FLAGS_model_variant == "M5"){
+    std::cout << "MODEL: M5 \n";
+    // Model M5: h(.) = tanh, f(.) = identity, l(.) = SQUARE
+    model = {.linear = false, .tanh = true, .linear_function = false, .sigmoid_output = false, .loss_type = "SQUARE"};
   }
 
   Random::timed_seed();
