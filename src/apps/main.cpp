@@ -1,5 +1,6 @@
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <boost/filesystem.hpp>
 
 #include <glog/logging.h>
 #include <gflags/gflags.h>
@@ -13,6 +14,8 @@
 #include <solver/solver.hpp>
 #include <model/recsys/cdae.hpp>
 
+#include <sys/stat.h> 
+#include <sys/types.h>
 
 /**
  * Data files
@@ -20,13 +23,13 @@
 std::string dataset_dir = "data/";
 std::string dataset_bin_dir = "data/bin/";
 
-// std::string dataset = "movielens_100k";
-// const char * log_file = "log/movielens_100k_implicit.log";
-// std::string dataset_filepath = dataset_dir + dataset + "_dataset/u.data";
+std::string dataset = "movielens_100k";
+const char * log_file = "log/movielens_100k_implicit.log";
+std::string dataset_filepath = dataset_dir + dataset + "_dataset/u.data";
 
-std::string dataset = "movielens_1m"; // movielens_1m
-const char * log_file = "log/movielens_1m_implicit.log";
-std::string dataset_filepath = dataset_dir + dataset + "_dataset/ratings.dat";
+// std::string dataset = "movielens_1m"; // movielens_1m
+// const char * log_file = "log/movielens_1m_implicit.log";
+// std::string dataset_filepath = dataset_dir + dataset + "_dataset/ratings.dat";
 
 // std::string dataset = "movielens_10m"; // movielens_1m
 // const char * log_file = "log/movielens_10m_implicit.log";
@@ -154,7 +157,6 @@ int main(int argc, char* argv[]) {
     // breaks a sequence of characters into tokens and perform tokenizing
     // Output is like: <Hello> <world> <foo> <bar> <yow> <baz> 
     auto line_parser = [&](const std::string& line) {
-      
       // rets are the tokenized lines: std::vector<std::string> rets;  
       auto rets = split_line(line, delimiter);
       CHECK_EQ(rets.size(), line_size); 
@@ -168,6 +170,17 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Initial Data loading => formatting.\n";
     // data contains data_info_ (dataset summary) and instances_ (dataset)
     data.load(FLAGS_input_file, RECSYS, line_parser, skip_header); 
+
+    // create data/bin directory with read/write/search permissions if it does not exist
+    // convert string to const char* by calling c_str()
+
+    std::string dirname = "data/bin"; 
+    int status = mkdir(dirname.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+
+    if (status != 0) 
+      std::cerr << "bin directory already exists" << std::endl; // strerror(errno) << std::endl;
+    else
+      std::cout << "bin directory created" << std::endl; 
 
     //serialize data object and save on cache_file (entire dataset)
     save(data, FLAGS_cache_file);
