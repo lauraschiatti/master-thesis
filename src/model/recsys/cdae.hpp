@@ -87,49 +87,98 @@ class CDAE : public RecsysModelBase {
   double data_loss(const Data& data_set, size_t sample_size=0) const {
      atomic<double> rets(0.);
     
-    parallel_for (0, num_users_, [&](size_t uid) {
-      auto fit = user_rated_items_.find(uid);
-      CHECK(fit != user_rated_items_.end());
-      auto& item_set = fit->second;
-      double user_rets = 0;
-
-      for (size_t jid = 0; jid < num_corruptions_; ++jid) {
-        
-        double scale = 1;
-        // std::cout << "data_loss get_corrupted_input_without_replacement2: " << corrpted_item_set.size() << "\n";
+    if(corruption_type_ == "mask_out" || corruption_type_ == "without_replacement"){
       
-        if (scaled_) {
-          scale /=  (1. - corruption_ratio_) ;
-        }    
-
-        // CDAE input: sample corrupted rating vector 
-        unordered_map<size_t, double> corrupted_item_set;
-        corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
+      parallel_for (0, num_users_, [&](size_t uid) {
         
-        if(corruption_type_ == "mask_out"){
-          corrupted_item_set = get_corrupted_input(uid, item_set, corruption_ratio_);
-        
-        } else if(corruption_type_ == "without_replacement") {
-          corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
+        // get rated items for user u
+        auto fit = user_rated_items_.find(uid);
+        CHECK(fit != user_rated_items_.end());
+        auto& item_set = fit->second;
+        double user_rets = 0;
 
-          // remove n-1 interactions more
-          int num_interactions_ = 2;
-          for (size_t idx = 1; idx < num_interactions_; ++idx) {
-            corrupted_item_set = get_corrupted_input_without_replacement(uid, corrupted_item_set);
+        for (size_t jid = 0; jid < num_corruptions_; ++jid) {
+          
+          double scale = 1;
+          // std::cout << "data_loss get_corrupted_input_without_replacement2: " << corrpted_item_set.size() << "\n";
+        
+          if (scaled_) {
+            scale /=  (1. - corruption_ratio_) ;
+          }    
+
+          // CDAE input: sample corrupted rating vector 
+          unordered_map<size_t, double> corrupted_item_set;
+          corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
+          
+          if(corruption_type_ == "mask_out"){
+            corrupted_item_set = get_corrupted_input(uid, item_set, corruption_ratio_);
+          
+          } else if(corruption_type_ == "without_replacement") {
+            corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
+
+            // remove n-1 interactions more
+            int num_interactions_ = 2;
+            for (size_t idx = 1; idx < num_interactions_; ++idx) {
+              corrupted_item_set = get_corrupted_input_without_replacement(uid, corrupted_item_set);
+            }
+          }
+          
+          auto z = get_hidden_values(uid, corrupted_item_set, scale);
+          
+          for (auto& p : item_set) {
+            size_t iid = p.first;
+            user_rets += loss_->evaluate(get_output_values(z, iid), 1.);
           }
         }
+        rets = rets + user_rets / num_corruptions_;
+      
+      });
+    
+    } else if(corruption_type_ == "with_replacement"){
+    
+      parallel_for (0, num_users_, [&](size_t uid) {
+
+        // get rated items for user u
+        auto fit = user_rated_items_.find(uid);
+        CHECK(fit != user_rated_items_.end());
+        auto& item_set = fit->second;
+        double user_rets = 0;
+
+        for (size_t jid = 0; jid < num_corruptions_; ++jid) {
+          
+          double scale = 1;
+          // std::cout << "data_loss get_corrupted_input_without_replacement2: " << corrpted_item_set.size() << "\n";
         
-        auto z = get_hidden_values(uid, corrupted_item_set, scale);
-        
-        for (auto& p : item_set) {
-          size_t iid = p.first;
-          user_rets += loss_->evaluate(get_output_values(z, iid), 1.);
+          if (scaled_) {
+            scale /=  (1. - corruption_ratio_) ;
+          }    
+
+          // CDAE input: corrupted rating vector 
+          unordered_map<size_t, double> corrupted_item_set;
+          corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
+
+          // create several corrupted versions for user uid
+          int num_corrupted_versions_ = 10;
+
+          // if num_corrupted_versions_ = 2 ==> same result of without_replacement corruption
+          
+          for (size_t idx = 1; idx < num_corrupted_versions_; ++idx) {
+            auto z = get_hidden_values(uid, corrupted_item_set, scale);
+          
+            for (auto& p : item_set) {
+              size_t iid = p.first;
+              user_rets += loss_->evaluate(get_output_values(z, iid), 1.);
+            }
+          }
+          
+          
         }
-      }
-      rets = rets + user_rets / num_corruptions_;
-    
-    });
-    
+        rets = rets + user_rets / num_corruptions_;
+      
+      });
+      
+    }
+
     return rets;
   }
    
@@ -197,63 +246,98 @@ class CDAE : public RecsysModelBase {
   */
   void train_one_iteration(const Data& train_data) {
 
-    // overall % of corruption of the original item_set 
-    double overall_item_set_corruption = 0.0;
+    if(corruption_type_ == "mask_out" || corruption_type_ == "without_replacement"){
 
-    // for all users
-    for (size_t uid = 0; uid < num_users_; ++uid) { 
+      // overall % of corruption of the original item_set 
+      double overall_item_set_corruption = 0.0;
 
-      double user_item_set_corruption = 0.0;
+      // for each of the users
+      for (size_t uid = 0; uid < num_users_; ++uid) { 
+
+        double user_item_set_corruption = 0.0;
+          
+        // get rated items for user u
+        auto it = user_rated_items_.find(uid);  // iterator (key/value, first/second)
+        CHECK(it != user_rated_items_.end()); // iterator one past the end 
+        auto& item_set = it->second; // value in the map
+
+        // for each corruption
+        for (size_t idx = 0; idx < num_corruptions_; ++idx) {
+          
+          // CDAE input: corrupted rating vector 
+          unordered_map<size_t, double> corrupted_item_set;
+          corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
+
+          if(corruption_type_ == "mask_out"){
+            corrupted_item_set = get_corrupted_input(uid, item_set, corruption_ratio_);
         
-      // get rated items for user u
-      auto it = user_rated_items_.find(uid);  // iterator (key/value, first/second)
-      CHECK(it != user_rated_items_.end()); // iterator one past the end 
-      auto& item_set = it->second; // value in the map
+          } else if(corruption_type_ == "without_replacement"){
+            corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
 
-      // for each corruption
-      for (size_t idx = 0; idx < num_corruptions_; ++idx) {
-        
-        // CDAE input: sample corrupted rating vector 
-        unordered_map<size_t, double> corrupted_item_set;
-        corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
+            // remove n-1 interactions more
+            int num_interactions_ = 2;
+            for (size_t idx = 1; idx < num_interactions_; ++idx) {
+              corrupted_item_set = get_corrupted_input_without_replacement(uid, corrupted_item_set);
+            }
 
-        if(corruption_type_ == "mask_out"){
-          corrupted_item_set = get_corrupted_input(uid, item_set, corruption_ratio_);
-      
-        } else if(corruption_type_ == "without_replacement"){
-          corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
-
-           // remove n-1 interactions more
-          int num_interactions_ = 2;
-          for (size_t idx = 1; idx < num_interactions_; ++idx) {
-            corrupted_item_set = get_corrupted_input_without_replacement(uid, corrupted_item_set);
           }
-        
-        } else if(corruption_type_ == "with_replacement"){ 
-          // TODO: NOT IMPLEMENTED!
+
+          // current user % of corruption of the original item_set 
+          user_item_set_corruption = (double)corrupted_item_set.size() / (double)item_set.size();
+
+          // train CDAE on user's corrupted input
+          train_one_user_corruption(uid, corrupted_item_set, item_set);
+          
         }
 
-        // current user % of corruption of the original item_set 
-        user_item_set_corruption = (double)corrupted_item_set.size() / (double)item_set.size();
+        if(uid == 0){
+          std::cout << "user_item_set_corruption: " << user_item_set_corruption << std::endl;
+        }
 
-        // train CDAE on user's corrupted input
-        train_one_user_corruption(uid, corrupted_item_set, item_set);
-        
+        overall_item_set_corruption =  overall_item_set_corruption + user_item_set_corruption;
       }
 
-      if(uid == 0){
-        std::cout << "user_item_set_corruption: " << user_item_set_corruption << std::endl;
-      }
+      std::cout << std::endl; 
+      double corruption_ratio = 1 - overall_item_set_corruption/num_users_; 
+      std::cout << " ---> overall_item_set_corruption: " << overall_item_set_corruption/num_users_ << std::endl;
+      std::cout << " ---> corruption_ratio = 1 - overall_item_set_corruption: " << corruption_ratio << std::endl;
+      std::cout << std::endl; 
+    
+    } else if(corruption_type_ == "with_replacement"){
+      
+      // for each of the users
+      for (size_t uid = 0; uid < num_users_; ++uid) { 
 
-      overall_item_set_corruption =  overall_item_set_corruption + user_item_set_corruption;
+        // get rated items for user u
+        auto it = user_rated_items_.find(uid);  // iterator (key/value, first/second)
+        CHECK(it != user_rated_items_.end()); // iterator one past the end 
+        auto& item_set = it->second; // value in the map
+
+        // for each corruption
+        for (size_t idx = 0; idx < num_corruptions_; ++idx) {
+          
+          // CDAE input: corrupted rating vector 
+          unordered_map<size_t, double> corrupted_item_set;
+          corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
+
+          // create several corrupted versions for user uid
+          int num_corrupted_versions_ = 10;
+
+          // if num_corrupted_versions_ = 2 ==> same result of without_replacement corruption
+          
+          for (size_t idx = 1; idx < num_corrupted_versions_; ++idx) {
+            corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
+
+            // train CDAE on the current corrupted input
+            train_one_user_corruption(uid, corrupted_item_set, item_set);
+          }
+
+          // current user % of corruption of the original item_set 
+          // user_item_set_corruption = (double)corrupted_item_set.size() / (double)item_set.size();
+        }
+
+      }
     }
-
-    std::cout << std::endl; 
-    double corruption_ratio = 1 - overall_item_set_corruption/num_users_; 
-    std::cout << " ---> overall_item_set_corruption: " << overall_item_set_corruption/num_users_ << std::endl;
-    std::cout << " ---> corruption_ratio = 1 - overall_item_set_corruption: " << corruption_ratio << std::endl;
-    std::cout << std::endl; 
-
   }
   
   /**
@@ -312,11 +396,10 @@ class CDAE : public RecsysModelBase {
   unordered_map<size_t, double> get_corrupted_input_without_replacement(int uid,
                                           const unordered_map<size_t, double>& item_set) const {
 
-      
-
     // 1) create copy of the original item_set as the corrupted_item_set as a 
 
     if (uid == 0){
+      std::cout << "uid 0\n";
       std::cout << "The original item_set. Size: " << item_set.size() << "\n";
       for (auto it = item_set.begin(); it != item_set.end(); ++it ){
         std::cout << " " << it->first;
@@ -356,10 +439,10 @@ class CDAE : public RecsysModelBase {
     // 2) sample a random interaction from the item_set of user uid
     
     // a) generate random number between 0 to input_set size
-    int interaction_idx = rand() % item_set.size() - 1;  
+    // int interaction_idx = rand() % item_set.size() - 1;  
 
     // b) get always the same interaction for each user
-    // int interaction_idx = item_set.size() - 1; 
+    int interaction_idx = item_set.size() - 1; 
 
     if (uid == 0){
       std::cout << "\nElement at position " << interaction_idx << " will be removed\n";
@@ -404,12 +487,9 @@ class CDAE : public RecsysModelBase {
         }
         std::cout << std::endl;
       }
-
     }
     
-
     return corrupted_item_set;
-
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -488,10 +568,7 @@ class CDAE : public RecsysModelBase {
     return corrupted_item_set;
   }
 
-
-
   ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
   /**
    * Train CDAE on corrupted input of a given user
