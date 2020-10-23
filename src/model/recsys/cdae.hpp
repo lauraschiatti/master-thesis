@@ -18,8 +18,11 @@ struct CDAEConfig {
   PenaltyType pt = L2;  
   size_t num_dim = 10; 
   bool using_adagrad = true;
-  double corruption_ratio = 0.5; 
   std::string corruption_type = "mask_out";
+  double corruption_ratio = 0.5; 
+  size_t num_removed_interactions = 1;
+  bool remove_same_interaction = true;
+  size_t num_corrupted_versions = 10;
   size_t num_corruptions = 1;
   bool asymmetric = false; 
   bool user_factor = true;
@@ -45,8 +48,11 @@ class CDAE : public RecsysModelBase {
     loss_ = Loss::create(mcfg.lt);
     penalty_ = Penalty::create(mcfg.pt);
     using_adagrad_ = mcfg.using_adagrad;
-    corruption_ratio_ = mcfg.corruption_ratio;
     corruption_type_ = mcfg.corruption_type;
+    corruption_ratio_ = mcfg.corruption_ratio;
+    num_removed_interactions_ = mcfg.num_removed_interactions;
+    remove_same_interaction_ = mcfg.remove_same_interaction;
+    num_corrupted_versions_ = mcfg.num_corrupted_versions;
     num_corruptions_ = mcfg.num_corruptions;
     asymmetric_ = mcfg.asymmetric;
     user_factor_ = mcfg.user_factor;
@@ -66,7 +72,10 @@ class CDAE : public RecsysModelBase {
         << "{LearnRate: " << learn_rate_ << "}, "
         << "{Using AdaGrad: " << using_adagrad_ << "}\n"
         << "\t{Corruption Type: " << corruption_type_ << "}, "
-        << "{Corruption Ratio: " << corruption_ratio_ << "}, "
+        << "{Corruption Ratio: " << corruption_ratio_ << "}, \n"
+        << "\t{Num of Removed Interactions : " << num_removed_interactions_ << "}, "
+        << "{Remove Same Interaction: " << remove_same_interaction_ << "}, "
+        << "{Num of Corrupted Versions: " << num_corrupted_versions_ << "}, \n"
         << "{Num Corruptions: " << num_corruptions_ << "}, \n"
         << "\t{Asymmetric: " << asymmetric_ << "} "
         << "{UserFactor: " << user_factor_ << "}, "
@@ -117,8 +126,7 @@ class CDAE : public RecsysModelBase {
             corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
 
             // remove n-1 interactions more
-            int num_interactions_ = 2;
-            for (size_t idx = 1; idx < num_interactions_; ++idx) {
+            for (size_t idx = 1; idx < num_removed_interactions_; ++idx) {
               corrupted_item_set = get_corrupted_input_without_replacement(uid, corrupted_item_set);
             }
           }
@@ -147,7 +155,6 @@ class CDAE : public RecsysModelBase {
         for (size_t jid = 0; jid < num_corruptions_; ++jid) {
           
           double scale = 1;
-          // std::cout << "data_loss get_corrupted_input_without_replacement2: " << corrpted_item_set.size() << "\n";
         
           if (scaled_) {
             scale /=  (1. - corruption_ratio_) ;
@@ -158,10 +165,6 @@ class CDAE : public RecsysModelBase {
           corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
 
           // create several corrupted versions for user uid
-          int num_corrupted_versions_ = 10;
-
-          // if num_corrupted_versions_ = 2 ==> same result of without_replacement corruption
-          
           for (size_t idx = 1; idx < num_corrupted_versions_; ++idx) {
             auto z = get_hidden_values(uid, corrupted_item_set, scale);
           
@@ -275,8 +278,7 @@ class CDAE : public RecsysModelBase {
             corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
 
             // remove n-1 interactions more
-            int num_interactions_ = 2;
-            for (size_t idx = 1; idx < num_interactions_; ++idx) {
+            for (size_t idx = 1; idx < num_removed_interactions_; ++idx) {
               corrupted_item_set = get_corrupted_input_without_replacement(uid, corrupted_item_set);
             }
 
@@ -303,6 +305,12 @@ class CDAE : public RecsysModelBase {
       std::cout << " ---> corruption_ratio = 1 - overall_item_set_corruption: " << corruption_ratio << std::endl;
       std::cout << std::endl; 
     
+
+    /**
+     * WITH REPLACEMENT CORRUPTION: 
+     * for each user repeat the without_corruption several times,
+     * each of them producing a different corrupted replica of the original user.
+    */ 
     } else if(corruption_type_ == "with_replacement"){
       
       // for each of the users
@@ -321,10 +329,6 @@ class CDAE : public RecsysModelBase {
           corrupted_item_set.reserve(static_cast<size_t>(item_set.size())); 
 
           // create several corrupted versions for user uid
-          int num_corrupted_versions_ = 10;
-
-          // if num_corrupted_versions_ = 2 ==> same result of without_replacement corruption
-          
           for (size_t idx = 1; idx < num_corrupted_versions_; ++idx) {
             corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
 
@@ -389,7 +393,7 @@ class CDAE : public RecsysModelBase {
   }
 
   /**
-   * WITHOUT REPLACEMENT CORRUPTION: 
+   * WITHOUT REPLACEMENT CORRUPTION: (VERSION 1)  << used for experiments >>
    * for each user with at least 2 interactions,
    * select a random interaction and remove it from its original item_set
   */ 
@@ -407,14 +411,7 @@ class CDAE : public RecsysModelBase {
       std::cout << std::endl;
     }
 
-    // different ways to copy a vector
-    //////////////////////////////////
-
-    // a) by assignment “=” operator.
-    // items in reverse order
-    // unordered_map<size_t, double> corrupted_item_set = item_set; 
-
-    // b) vector::insert 
+    // different ways to copy a vector ==> use vector::insert 
     // Because vectors use an array as their underlying storage, 
     // inserting elements in positions other than the vector end causes the container 
     // to relocate all the elements that were after position to their new positions.                              
@@ -423,8 +420,6 @@ class CDAE : public RecsysModelBase {
     for (auto& p : item_set) {
       corrupted_item_set.insert(p);
     }
-
-    //////////////////////////////////
 
     if (uid == 0){
       std::cout << "The copy of the original item_set (corrupted_item_set). Size:" << corrupted_item_set.size() << "\n";
@@ -437,12 +432,17 @@ class CDAE : public RecsysModelBase {
     // ==========================================================================
     
     // 2) sample a random interaction from the item_set of user uid
-    
-    // a) generate random number between 0 to input_set size
-    // int interaction_idx = rand() % item_set.size() - 1;  
 
-    // b) get always the same interaction for each user
-    int interaction_idx = item_set.size() - 1; 
+    int interaction_idx;
+
+    if(remove_same_interaction_){  // variation b) get always the same interaction for each user
+      // NOTE: remove last interaction 
+      // same obtained results when removed 1st and last interaction
+      interaction_idx = item_set.size() - 1; 
+    
+    } else {  // variation a) generate random number between 0 to input_set size
+      interaction_idx = rand() % item_set.size() - 1;  
+    }
 
     if (uid == 0){
       std::cout << "\nElement at position " << interaction_idx << " will be removed\n";
@@ -492,12 +492,15 @@ class CDAE : public RecsysModelBase {
     return corrupted_item_set;
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+  
+  /**
+   * WITHOUT REPLACEMENT CORRUPTION: (VERSION 2) << lower results w.r.t. version 1>>
+   * for each user with at least 2 interactions,
+   * select a random interaction and copy into the originally empty corrupted_item_set
+   * all interactions but the one to be removed.
+  */ 
   unordered_map<size_t, double> get_corrupted_input_without_replacement2(int uid,
                                           const unordered_map<size_t, double>& item_set) const {
-
 
     if (uid == 0){
       std::cout << "uid 0\n";
@@ -509,12 +512,17 @@ class CDAE : public RecsysModelBase {
     }
 
     // 1) sample a random interaction from the item_set of user uid
-    
-    // a) generate random number between 0 to input_set size
-    // int interaction_idx = rand() % item_set.size() - 1;  
 
-    // b) get always the same interaction for each user
-    int interaction_idx = item_set.size() - 1;  // same results when removed 1st and last interaction
+    int interaction_idx;
+
+    if(remove_same_interaction_){  // variation b) get always the same interaction for each user
+      // NOTE: remove last interaction 
+      // same obtained results when removed 1st and last interaction
+      interaction_idx = item_set.size() - 1; 
+    
+    } else {  // variation a) generate random number between 0 to input_set size
+      interaction_idx = rand() % item_set.size() - 1;  
+    }
 
     if (uid == 0){
       std::cout << "\nElement at position " << interaction_idx << " will be removed\n";
@@ -527,6 +535,8 @@ class CDAE : public RecsysModelBase {
     if (uid == 0){ 
       cout << "Element at index " << index << " is: " << *it2 << '\n';
     }
+
+    // ==========================================================================
 
     // 2) append all the items to the the corrupted_item_set but the interaction to be removed 
 
@@ -568,7 +578,6 @@ class CDAE : public RecsysModelBase {
     return corrupted_item_set;
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   /**
    * Train CDAE on corrupted input of a given user
@@ -991,8 +1000,11 @@ class CDAE : public RecsysModelBase {
   size_t num_dim_ = 0.;  
   double learn_rate_ = 0.;
   double lambda_ = 0.;  
-  double corruption_ratio_ = 0.5;
   std::string corruption_type_ = "mask_out";
+  double corruption_ratio_ = 0.5;
+  size_t num_removed_interactions_ = 1;
+  bool remove_same_interaction_ = true;
+  size_t num_corrupted_versions_ = 10;
   size_t num_corruptions_ = 10;
   size_t num_neg_ = 5;
   bool using_adagrad_ = true;

@@ -60,15 +60,25 @@ DEFINE_string(model_variant, "M1", "Which Model to train"); // "M1", "M2", "M3",
 /**
  * Model parameters
 */
+
 DEFINE_int32(num_dim, 50, "Num of latent dimensions"); // K : num of latent dimensions (hidden neurons)
 DEFINE_int32(num_neg, 5, "Num of negative samples");  // NS
 
 // input corruption
-DEFINE_string(corruption_type, "without_replacement", "Corruption type"); // "none", "mask_out", "without_replacement", "with_replacement"
-// params for mask_out corruption
+DEFINE_string(corruption_type, "with_replacement", "Corruption type"); // mask_out", "without_replacement", "with_replacement"
 DEFINE_int32(cnum, 1, "Num of Corruptions"); // default
+
+// params for mask_out corruption
 DEFINE_double(cratio, 0.0, "Corruption Ratio");
-DEFINE_bool(scaled, true, "scaled input"); // controls the corruption (true => scale /= 1 - corruption_ratio)
+DEFINE_bool(scaled, true, "Scaled input"); // controls the corruption (true => scale /= 1 - corruption_ratio)
+
+// params for without_replacement replacement
+DEFINE_int32(num_removed_interactions, 2, "Num of removed interactions");  // n
+DEFINE_bool(remove_same_interaction, true, "Remove same interaction for a user at each iteration");  // false=different interaction, true=same interaction 
+
+// params for with_replacement replacement
+// if num_corrupted_versions_ = 2, we obtain the same result of without_replacement corruption with num_removed_interactions = 1 (n=1)
+DEFINE_int32(num_corrupted_versions, 20, "Num of user's profile corrupted version");  // n
 
 // training using SGD (and AdaGrad)
 DEFINE_int32(max_iteration, 50, "Max num of iterations"); // default
@@ -80,7 +90,7 @@ DEFINE_double(beta, 1., "Beta for adagrad"); // β
 DEFINE_double(holdout_perc, 0.2, "Holdout percentage"); 
 
 // user factor: include user input node (CDAE) or not (DAE)
-DEFINE_bool(user_factor, true, "using user factor"); // false=DAE, true=CDAE
+DEFINE_bool(user_factor, true, "Include user factor"); // false=DAE, true=CDAE
 
 // asymmetric DAE: tied weights (TW) or non-tied weights (NTW)
 DEFINE_bool(asym, true, "Asymmetric DAE"); // false=TW, true=NTW 
@@ -173,7 +183,6 @@ int main(int argc, char* argv[]) {
 
     // create data/bin directory with read/write/search permissions if it does not exist
     // convert string to const char* by calling c_str()
-
     std::string dirname = "data/bin"; 
     int status = mkdir(dirname.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 
@@ -229,7 +238,6 @@ int main(int argc, char* argv[]) {
   LOG(INFO) << train;
   LOG(INFO) << "Test set.\n";
   LOG(INFO) << test;
-
 
   // if (FLAGS_task == "train") {
   //   std::cout << "TASK: train \n";
@@ -301,6 +309,9 @@ int main(int argc, char* argv[]) {
     config.num_corruptions = FLAGS_cnum;
     config.corruption_ratio = FLAGS_cratio;
     config.corruption_type = FLAGS_corruption_type;
+    config.num_removed_interactions = FLAGS_num_removed_interactions;
+    config.remove_same_interaction = FLAGS_remove_same_interaction;
+    config.num_corrupted_versions = FLAGS_num_corrupted_versions;
     config.linear = model.linear;
     config.scaled = FLAGS_scaled;
     config.num_neg = FLAGS_num_neg;
@@ -326,7 +337,15 @@ int main(int argc, char* argv[]) {
     
     CDAE model(config);
     Solver<CDAE> solver(model, FLAGS_max_iteration);
-    solver.train(train, test, {TOPN}); // train, validation
+
+    // apply with_replacement corruption at the very beginning
+    bool apply_with_replacement_corruption = false;
+  
+    // if(FLAGS_corruption_type == "with_replacement") {
+    //   apply_with_replacement_corruption = true;
+    // }
+
+    solver.train(train, test, {TOPN}, apply_with_replacement_corruption); // train, validation
     // solver.test(test, {TOPN});
   }
 
