@@ -73,12 +73,12 @@ DEFINE_double(cratio, 0.0, "Corruption Ratio");
 DEFINE_bool(scaled, true, "Scaled input"); // controls the corruption (true => scale /= 1 - corruption_ratio)
 
 // params for without_replacement replacement
-DEFINE_int32(num_removed_interactions, 2, "Num of removed interactions");  // n
+DEFINE_int32(num_removed_interactions, 10, "Num of removed interactions");  // n
 DEFINE_bool(remove_same_interaction, true, "Remove same interaction for a user at each iteration");  // false=different interaction, true=same interaction 
 
 // params for with_replacement replacement
 // if num_corrupted_versions_ = 2, we obtain the same result of without_replacement corruption with num_removed_interactions = 1 (n=1)
-DEFINE_int32(num_corrupted_versions, 20, "Num of user's profile corrupted version");  // n
+DEFINE_int32(num_corrupted_versions, 20, "Num of user's profile corrupted version");  // c
 
 // training using SGD (and AdaGrad)
 DEFINE_int32(max_iteration, 50, "Max num of iterations"); // default

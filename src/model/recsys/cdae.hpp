@@ -166,6 +166,14 @@ class CDAE : public RecsysModelBase {
 
           // create several corrupted versions for user uid
           for (size_t idx = 1; idx < num_corrupted_versions_; ++idx) {
+
+            corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
+
+            // remove n-1 interactions more
+            for (size_t idx = 1; idx < num_removed_interactions_; ++idx) {
+              corrupted_item_set = get_corrupted_input_without_replacement(uid, corrupted_item_set);
+            }
+
             auto z = get_hidden_values(uid, corrupted_item_set, scale);
           
             for (auto& p : item_set) {
@@ -331,6 +339,11 @@ class CDAE : public RecsysModelBase {
           // create several corrupted versions for user uid
           for (size_t idx = 1; idx < num_corrupted_versions_; ++idx) {
             corrupted_item_set = get_corrupted_input_without_replacement(uid, item_set);
+
+            // remove n-1 interactions more
+            for (size_t idx = 1; idx < num_removed_interactions_; ++idx) {
+              corrupted_item_set = get_corrupted_input_without_replacement(uid, corrupted_item_set);
+            }
 
             // train CDAE on the current corrupted input
             train_one_user_corruption(uid, corrupted_item_set, item_set);
