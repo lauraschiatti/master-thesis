@@ -17,23 +17,27 @@
 #include <sys/stat.h> 
 #include <sys/types.h>
 
+// measure execution time
+#include <chrono> 
+using namespace std::chrono; 
+
 /**
  * Data files
 */ 
 std::string dataset_dir = "data/";
 std::string dataset_bin_dir = "data/bin/";
 
-std::string dataset = "movielens_100k";
-const char * log_file = "log/movielens_100k_implicit.log";
-std::string dataset_filepath = dataset_dir + dataset + "_dataset/u.data";
+// std::string dataset = "movielens_100k";
+// const char * log_file = "log/movielens_100k_implicit.log";
+// std::string dataset_filepath = dataset_dir + dataset + "_dataset/u.data";
 
 // std::string dataset = "movielens_1m"; // movielens_1m
 // const char * log_file = "log/movielens_1m_implicit.log";
 // std::string dataset_filepath = dataset_dir + dataset + "_dataset/ratings.dat";
 
-// std::string dataset = "movielens_10m"; // movielens_1m
-// const char * log_file = "log/movielens_10m_implicit.log";
-// std::string dataset_filepath = dataset_dir + dataset + "_dataset/ratings.dat";
+std::string dataset = "movielens_10m"; 
+const char * log_file = "log/movielens_10m_implicit.log";
+std::string dataset_filepath = dataset_dir + dataset + "_dataset/ratings.dat";
 
 // std::string dataset = "politic_old"; // politic_old
 // const char * log_file = "log/politic_old_implicit.log";
@@ -73,7 +77,7 @@ DEFINE_double(cratio, 0.0, "Corruption Ratio");
 DEFINE_bool(scaled, true, "Scaled input"); // controls the corruption (true => scale /= 1 - corruption_ratio)
 
 // params for without_replacement replacement
-DEFINE_int32(num_removed_interactions, 10, "Num of removed interactions");  // n
+DEFINE_int32(num_removed_interactions, 2, "Num of removed interactions");  // n
 DEFINE_bool(remove_same_interaction, true, "Remove same interaction for a user at each iteration");  // false=different interaction, true=same interaction 
 
 // params for with_replacement replacement
@@ -338,15 +342,21 @@ int main(int argc, char* argv[]) {
     CDAE model(config);
     Solver<CDAE> solver(model, FLAGS_max_iteration);
 
-    // apply with_replacement corruption at the very beginning
-    bool apply_with_replacement_corruption = false;
-  
-    // if(FLAGS_corruption_type == "with_replacement") {
-    //   apply_with_replacement_corruption = true;
-    // }
+    // get starting timepoint 
+    auto start = high_resolution_clock::now(); 
 
-    solver.train(train, test, {TOPN}, apply_with_replacement_corruption); // train, validation
-    // solver.test(test, {TOPN});
+    // train the model
+    solver.train(train, test, {TOPN}); // train, validation
+    
+    // time after function call 
+    auto stop = high_resolution_clock::now();
+
+    // get the difference in timepoints and cast it to required units.
+    // Predefined units are nanoseconds, microseconds, milliseconds, 
+    // seconds, minutes, hours. 
+    auto duration = duration_cast<seconds>(stop - start); 
+    std::cout << "algorithm execution time: " << duration.count() << std::endl; 
+
   }
 
   return 0;
