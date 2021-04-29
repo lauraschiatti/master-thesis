@@ -1,6 +1,6 @@
 # Non-traditional approaches to input corruption in Collaborative Denoising AutoEncoders
 
-MSc. in Computer Science & Engineering thesis @ Politecnico di Milano, November 2020. Defended on December 15, 2020.
+Thesis MSc. in Computer Science & Engineering @ Politecnico di Milano, November 2020. Defended on December 15, 2020.
 
 Mirrors:
 - https://www.politesi.polimi.it/handle/10589/170595
