@@ -41,12 +41,12 @@
 # data/
 
 # Log files
-# log/
+log/
 *.INFO
 movielens
 
-*/run_all_tests.*
-*/run_all_tests.INFO
+# Tests
+*/run_all_tests*
 
 
 
