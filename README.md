@@ -62,6 +62,10 @@ Run Makefile, which generates the executable test main, with the command:
     
 ### Setup
 
+Create a logging directory inside `src/apps/`
+
+    mkdir src/apps/log
+
 Run main file
 
     cd src/apps 
