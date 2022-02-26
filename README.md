@@ -21,6 +21,35 @@ There are two core purposes for this work. To begin with, it is aimed to replica
 
 ## Setup details
 
+### Datasets
+
+Inside `src/apps/data/bin` the following binary encoded datasets are available:
+
+ * `movielens_100k.bin`
+ * `movielens_10m.bin`
+
+Besides, also a default 80-20% split is present,
+
+ * `movielens_100k.train.bin` 
+ * `movielens_100k.test.bin`
+ * `movielens_10m.train.bin` 
+ * `movielens_10m.test.bin`
+
+To add the non-encoded datasets, 
+
+1. Create a folder in `src/apps/data` for each movielens dataset to be considered, as follows:
+
+ * `movielens_100k_dataset/`
+ * `movielens_10m_dataset/`
+ * `movielens_1m_dataset/`
+
+ 2. Add the corresponding rating matrices at [https://www.google.com](https://www.google.com)
+
+ * `movielens_100k_dataset/` -> `u.data`
+ * `movielens_10m_dataset/` -> `ratings.dat`
+ * `movielens_1m_dataset/` -> `ratings.dat`
+
+
 ### Testing
 
 Run test file
