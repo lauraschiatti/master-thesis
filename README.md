@@ -18,8 +18,87 @@ There are two core purposes for this work. To begin with, it is aimed to replica
  - *Collaborative Denoising Autoencoder (CDAE) (Wu, Y., DuBois, C.,
    Zheng, A. X., & Ester, M. (2016, February)*. Collaborative denoising auto-encoders for top-n recommender systems. In Proceedings of the Ninth ACM International Conference on Web Search and Data Mining (pp. 153-162). ACM.)
    
+## Implementation Details
 
-## Setup details
+A basic configuration for the CDAE model is as follows:
+
+```c
+CDAE config: {
+   
+   model_variant = M1   // model to train: "M1", "M2", "M3", "M4"
+   num_dim = 50         // K : num of latent dims (hidden neurons)
+   num_neg = 5          // NS: num of negative samples
+   
+   // training using SGD (and AdaGrad)
+   max_iteration = 50   // max num of iterations
+   learn_rate = 0.1     // learning Rate
+   adagrad = true       // use AdaGrad
+   beta = 1.0           // beta for AdaGrad
+   holdout_perc = 0.2   // holdout data
+   lambda = 0.01        // regularization rate
+   penalty = L2         // regularization penalty
+   
+   // model settings
+   // h(.): activation function on the hidden layer
+   bool linear;           // true=identity, false=check tanh/sigmoid
+   bool tanh;             // true=tanh, false=sigmoid
+   bool linear_function;  // true=linear_mapping
+   
+   // f(.) activation function on the output layer
+   bool sigmoid_output;   // true=sigmoid , false=identity
+   string loss_type;      // loss function type l(.):
+                          // "SQUARE", "LOG", "HINGE", "LOGISTIC", "CE"
+   
+   // additional parameters for experimental settings
+   user_factor = true     // true=include user input node (CDAE), false=DAE
+   asymmetric = true      // true=asymmetric DAE (tied weights)
+                          // false=untied weights
+   
+   // input corruption
+   corruption_type = "mask_out" // "mask_out", "without_replacement",
+                                // "with_replacement"
+   num_corruptions = 1          // number of corruption by input
+   
+   // params for mask_out corruption
+   corruption_ratio = 0.0.   // level of corruption
+   scaled = true             // scaled input to prevent corruption bias
+   
+   // params for without_replacement replacement corruption
+   num_removed_interactions = 2       // number of ratings to remove
+   remove_same_interaction = false    // false=different interaction at each iteration
+                                      // true=same interaction
+   
+   // params for with_replacement replacement
+   num_corrupted_versions = 10        // num of user's profile corrupted replicas
+}
+```
+
+Configuration for model variants:
+
+```c
+// Model M1: h(.) = identity, f(.) = identity, l(.) = SQUARE
+model = {.linear = true, .tanh = false,
+.linear_function = false, .sigmoid_output = false,
+.loss_type = "SQUARE"};
+ 
+// Model M2: h(.) = identity, f(.) = sigmoid, l(.) = LOGISTIC
+model = {.linear = true, .tanh = false,
+.linear_function = false, .sigmoid_output = true,
+.loss_type = "LOGISTIC"};
+
+// Model M3: h(.) = sigmoid, f(.) = identity, l(.) = SQUARE
+model = {.linear = false, .tanh = false,
+.linear_function = false, .sigmoid_output = false,
+.loss_type = "SQUARE"};
+
+// Model M4: h(.) = sigmoid, f(.) = sigmoid, l(.) = LOGISTIC
+model = {.linear = false, .tanh = false,
+.linear_function = false, .sigmoid_output = TRUE,
+.loss_type = "LOGISTIC"};
+
+```
+
+## Setup Details
 
 ### Datasets
 
